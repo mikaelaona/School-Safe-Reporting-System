@@ -1,19 +1,27 @@
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template_string, request, redirect, session
 import sqlite3
 import datetime
 import random
 import string
+import os
+import html
 
 app = Flask(__name__)
+
+# Secret key for admin login session
+app.secret_key = os.environ.get("SECRET_KEY", "schoolsafe-secret-key")
+
 DB_FILE = "schoolsafe.db"
 
 
 # =========================================================
-# DATABASE SETUP
+# DATABASE
 # =========================================================
 
 def init_db():
+
     conn = sqlite3.connect(DB_FILE)
+
     c = conn.cursor()
 
     c.execute("""
@@ -72,8 +80,6 @@ body {
     color: #222;
 }
 
-/* HEADER */
-
 header {
     background: #1261a0;
     color: white;
@@ -89,8 +95,6 @@ header h1 {
 header p {
     margin: 8px 0 0;
 }
-
-/* CONTAINER */
 
 .container {
     width: 92%;
@@ -110,7 +114,25 @@ p {
     line-height: 1.6;
 }
 
-/* BUTTONS */
+.card-container {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-top: 25px;
+}
+
+.card {
+    flex: 1;
+    min-width: 250px;
+    background: #f4f9ff;
+    border: 1px solid #d5e8fa;
+    padding: 25px;
+    border-radius: 12px;
+}
+
+.card h3 {
+    color: #1261a0;
+}
 
 .btn {
     display: inline-block;
@@ -129,7 +151,13 @@ p {
     background: #0b4778;
 }
 
-/* FORM */
+.btn-danger {
+    background: #b52b2b;
+}
+
+.btn-danger:hover {
+    background: #8d2020;
+}
 
 form {
     margin-top: 20px;
@@ -157,8 +185,6 @@ textarea {
     resize: vertical;
 }
 
-/* REPORT ID */
-
 .report-id {
     background: #e4f1ff;
     color: #1261a0;
@@ -169,8 +195,6 @@ textarea {
     font-weight: bold;
     margin: 20px 0;
 }
-
-/* MESSAGES */
 
 .success {
     color: green;
@@ -189,29 +213,9 @@ textarea {
     margin-top: 20px;
 }
 
-/* HOME CARDS */
-
-.card-container {
-    display: flex;
-    gap: 15px;
-    flex-wrap: wrap;
-    margin-top: 25px;
+.status {
+    font-weight: bold;
 }
-
-.card {
-    flex: 1;
-    min-width: 220px;
-    background: #f4f9ff;
-    border: 1px solid #d5e8fa;
-    padding: 20px;
-    border-radius: 12px;
-}
-
-.card h3 {
-    color: #1261a0;
-}
-
-/* TABLE */
 
 table {
     width: 100%;
@@ -232,19 +236,11 @@ td {
     text-align: left;
 }
 
-.status {
-    font-weight: bold;
-}
-
-/* FOOTER */
-
 footer {
     text-align: center;
     margin: 30px;
     color: #666;
 }
-
-/* MOBILE */
 
 @media(max-width: 600px) {
 
@@ -273,7 +269,7 @@ footer {
 
 
 # =========================================================
-# HOME PAGE
+# STUDENT HOME
 # =========================================================
 
 @app.route('/')
@@ -301,40 +297,44 @@ def index():
 
     <h1>🏫 SchoolSafe</h1>
 
-    <p>School Safety & Facility Reporting System</p>
+    <p>Student School Issue Reporting System</p>
 
 </header>
 
 
 <div class="container">
 
-    <h2>Keep Our School Safe</h2>
+    <h2>Report a School Issue</h2>
 
     <p>
         Found a damaged, unsafe, or problematic
         school facility? Report it through
-        SchoolSafe so the school administration
-        can take action.
+        SchoolSafe.
     </p>
 
 
     <div class="card-container">
+
+
+        <!-- REPORT ISSUE -->
 
         <div class="card">
 
             <h3>🚨 Report an Issue</h3>
 
             <p>
-                Report broken or unsafe facilities
-                around the school.
+                Report a broken, damaged, or unsafe
+                facility in the school.
             </p>
 
             <a href="/report" class="btn">
-                Report Problem
+                Report an Issue
             </a>
 
         </div>
 
+
+        <!-- TRACK REPORT -->
 
         <div class="card">
 
@@ -346,25 +346,11 @@ def index():
             </p>
 
             <a href="/status" class="btn">
-                Check Status
+                Track Report
             </a>
 
         </div>
 
-
-        <div class="card">
-
-            <h3>👨‍💼 Admin</h3>
-
-            <p>
-                View reports and update their status.
-            </p>
-
-            <a href="/admin" class="btn">
-                Admin Dashboard
-            </a>
-
-        </div>
 
     </div>
 
@@ -387,7 +373,7 @@ def index():
 
 
 # =========================================================
-# REPORT PAGE
+# REPORT ISSUE
 # =========================================================
 
 @app.route('/report', methods=['GET', 'POST'])
@@ -395,11 +381,26 @@ def report():
 
     if request.method == 'POST':
 
-        reporter = request.form.get('reporter', '').strip()
-        issue_type = request.form.get('issue_type', '').strip()
-        location = request.form.get('location', '').strip()
-        description = request.form.get('description', '').strip()
-        urgency = request.form.get('urgency', '').strip()
+        reporter = request.form.get(
+            'reporter', ''
+        ).strip()
+
+        issue_type = request.form.get(
+            'issue_type', ''
+        ).strip()
+
+        location = request.form.get(
+            'location', ''
+        ).strip()
+
+        description = request.form.get(
+            'description', ''
+        ).strip()
+
+        urgency = request.form.get(
+            'urgency', ''
+        ).strip()
+
 
         if not reporter or not issue_type or not location or not description or not urgency:
 
@@ -423,13 +424,18 @@ def report():
                 """
             )
 
+
         report_id = generate_report_id()
 
         today = datetime.date.today().isoformat()
+
         now = datetime.datetime.now().strftime("%H:%M")
 
+
         conn = sqlite3.connect(DB_FILE)
+
         c = conn.cursor()
+
 
         c.execute("""
             INSERT INTO reports
@@ -457,85 +463,50 @@ def report():
             now
         ))
 
+
         conn.commit()
+
         conn.close()
+
 
         return render_template_string(
             STYLE + f"""
 
-<!DOCTYPE html>
+            <div class="container">
 
-<html>
+                <h2>✅ Report Submitted!</h2>
 
-<head>
+                <p class="success">
+                    Your issue has been successfully
+                    submitted.
+                </p>
 
-    <title>Report Submitted</title>
+                <p>
+                    Your Report ID is:
+                </p>
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1">
+                <div class="report-id">
+                    {html.escape(report_id)}
+                </div>
 
-</head>
+                <p>
+                    Please save your Report ID.
+                    You will need it to track your report.
+                </p>
 
-<body>
+                <a href="/status" class="btn">
+                    🔎 Track Report
+                </a>
 
-<header>
+                <a href="/" class="btn">
+                    🏠 Home
+                </a>
 
-    <h1>🏫 SchoolSafe</h1>
+            </div>
 
-</header>
-
-
-<div class="container">
-
-    <h2>✅ Report Submitted!</h2>
-
-    <p class="success">
-
-        Your school safety report has been
-        successfully submitted.
-
-    </p>
-
-
-    <p>
-        Your Report ID is:
-    </p>
-
-
-    <div class="report-id">
-
-        {report_id}
-
-    </div>
-
-
-    <p>
-
-        Please save your Report ID.
-        You will need it to check your
-        report status.
-
-    </p>
-
-
-    <a href="/status" class="btn">
-        🔎 Check Status
-    </a>
-
-
-    <a href="/" class="btn">
-        🏠 Home
-    </a>
-
-</div>
-
-
-</body>
-
-</html>
-
-"""
+            """
         )
+
 
     return render_template_string(
         STYLE + """
@@ -546,7 +517,7 @@ def report():
 
 <head>
 
-    <title>Report a Problem</title>
+    <title>Report an Issue</title>
 
     <meta name="viewport"
           content="width=device-width, initial-scale=1">
@@ -558,16 +529,16 @@ def report():
 
 <header>
 
-    <h1>🚨 Report a School Issue</h1>
+    <h1>🚨 Report an Issue</h1>
 
-    <p>SchoolSafe Reporting Form</p>
+    <p>SchoolSafe</p>
 
 </header>
 
 
 <div class="container">
 
-    <h2>Submit a Safety Report</h2>
+    <h2>Submit Your Report</h2>
 
 
     <form method="POST">
@@ -595,49 +566,27 @@ def report():
                 -- Select Issue --
             </option>
 
-            <option>
-                Broken Chair
-            </option>
+            <option>Broken Chair</option>
 
-            <option>
-                Broken Table
-            </option>
+            <option>Broken Table</option>
 
-            <option>
-                Broken Electric Fan
-            </option>
+            <option>Broken Electric Fan</option>
 
-            <option>
-                Broken Light
-            </option>
+            <option>Broken Light</option>
 
-            <option>
-                Damaged Door
-            </option>
+            <option>Damaged Door</option>
 
-            <option>
-                Broken Window
-            </option>
+            <option>Broken Window</option>
 
-            <option>
-                Electrical Problem
-            </option>
+            <option>Electrical Problem</option>
 
-            <option>
-                Comfort Room Problem
-            </option>
+            <option>Comfort Room Problem</option>
 
-            <option>
-                Roof Damage
-            </option>
+            <option>Roof Damage</option>
 
-            <option>
-                Slippery Floor
-            </option>
+            <option>Slippery Floor</option>
 
-            <option>
-                Other
-            </option>
+            <option>Other</option>
 
         </select>
 
@@ -655,12 +604,12 @@ def report():
 
 
         <label>
-            Description of the Problem
+            Description
         </label>
 
         <textarea
             name="description"
-            placeholder="Explain what happened or what is damaged..."
+            placeholder="Describe the problem..."
             required
         ></textarea>
 
@@ -675,21 +624,13 @@ def report():
                 -- Select Urgency --
             </option>
 
-            <option>
-                Low
-            </option>
+            <option>Low</option>
 
-            <option>
-                Medium
-            </option>
+            <option>Medium</option>
 
-            <option>
-                High
-            </option>
+            <option>High</option>
 
-            <option>
-                Emergency
-            </option>
+            <option>Emergency</option>
 
         </select>
 
@@ -724,7 +665,7 @@ def report():
 
 
 # =========================================================
-# STATUS PAGE
+# TRACK REPORT
 # =========================================================
 
 @app.route('/status', methods=['GET', 'POST'])
@@ -732,12 +673,18 @@ def status():
 
     result = ""
 
+
     if request.method == 'POST':
 
-        report_id = request.form.get('report_id', '').strip()
+        report_id = request.form.get(
+            'report_id', ''
+        ).strip()
+
 
         conn = sqlite3.connect(DB_FILE)
+
         c = conn.cursor()
+
 
         c.execute("""
             SELECT *
@@ -745,9 +692,11 @@ def status():
             WHERE report_id = ?
         """, (report_id,))
 
+
         report = c.fetchone()
 
         conn.close()
+
 
         if report:
 
@@ -759,56 +708,52 @@ def status():
 
                 <p>
                     <strong>Report ID:</strong>
-                    {report[1]}
-                </p>
-
-                <p>
-                    <strong>Reporter:</strong>
-                    {report[2]}
+                    {html.escape(report[1])}
                 </p>
 
                 <p>
                     <strong>Issue:</strong>
-                    {report[3]}
+                    {html.escape(report[3])}
                 </p>
 
                 <p>
                     <strong>Location:</strong>
-                    {report[4]}
+                    {html.escape(report[4])}
                 </p>
 
                 <p>
                     <strong>Description:</strong>
-                    {report[5]}
+                    {html.escape(report[5])}
                 </p>
 
                 <p>
                     <strong>Urgency:</strong>
-                    {report[6]}
+                    {html.escape(report[6])}
                 </p>
 
                 <p>
                     <strong>Status:</strong>
 
                     <span class="status">
-                        {report[7]}
+                        {html.escape(report[7])}
                     </span>
 
                 </p>
 
                 <p>
                     <strong>Date:</strong>
-                    {report[8]}
+                    {html.escape(report[8])}
                 </p>
 
                 <p>
                     <strong>Time:</strong>
-                    {report[9]}
+                    {html.escape(report[9])}
                 </p>
 
             </div>
 
             """
+
 
         else:
 
@@ -822,6 +767,7 @@ def status():
 
             """
 
+
     return render_template_string(
         STYLE + f"""
 
@@ -831,7 +777,7 @@ def status():
 
 <head>
 
-    <title>Check Status</title>
+    <title>Track Report</title>
 
     <meta name="viewport"
           content="width=device-width, initial-scale=1">
@@ -843,7 +789,9 @@ def status():
 
 <header>
 
-    <h1>🔎 Check Report Status</h1>
+    <h1>🔎 Track Report</h1>
+
+    <p>SchoolSafe</p>
 
 </header>
 
@@ -854,16 +802,18 @@ def status():
 
 
     <p>
-        Enter the Report ID you received
-        after submitting your report.
+        Enter your Report ID to see the current
+        status of your report.
     </p>
 
 
     <form method="POST">
 
+
         <label>
             Report ID
         </label>
+
 
         <input
             type="text"
@@ -875,9 +825,10 @@ def status():
 
         <button type="submit" class="btn">
 
-            🔎 Check Status
+            🔎 Track Report
 
         </button>
+
 
     </form>
 
@@ -905,14 +856,269 @@ def status():
 
 
 # =========================================================
-# ADMIN DASHBOARD
+# ADMIN LOGIN
+# =========================================================
+
+@app.route('/admin-login', methods=['GET', 'POST'])
+def admin_login():
+
+    message = ""
+
+
+    if request.method == 'POST':
+
+        username = request.form.get(
+            'username', ''
+        ).strip()
+
+        password = request.form.get(
+            'password', ''
+        ).strip()
+
+
+        # ADMIN ACCOUNT
+        # Change these if you want.
+
+        if username == "admin" and password == "admin123":
+
+            session['admin_logged_in'] = True
+
+            return redirect('/admin')
+
+
+        else:
+
+            message = """
+            <p class="error">
+                ❌ Incorrect username or password.
+            </p>
+            """
+
+
+    return render_template_string(
+        STYLE + f"""
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+    <title>Admin Login</title>
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+</head>
+
+<body>
+
+
+<header>
+
+    <h1>🔐 Admin Login</h1>
+
+    <p>SchoolSafe</p>
+
+</header>
+
+
+<div class="container">
+
+    <h2>Administrator Login</h2>
+
+    {message}
+
+
+    <form method="POST">
+
+
+        <label>
+            Username
+        </label>
+
+        <input
+            type="text"
+            name="username"
+            placeholder="Enter username"
+            required
+        >
+
+
+        <label>
+            Password
+        </label>
+
+        <input
+            type="password"
+            name="password"
+            placeholder="Enter password"
+            required
+        >
+
+
+        <button type="submit" class="btn">
+
+            🔐 Login
+
+        </button>
+
+
+    </form>
+
+
+    <br>
+
+
+    <a href="/">
+        ← Back to Student Page
+    </a>
+
+
+</div>
+
+
+</body>
+
+</html>
+
+"""
+    )
+
+
+# =========================================================
+# ADMIN HOME
 # =========================================================
 
 @app.route('/admin')
 def admin():
 
+    # Must be logged in
+
+    if not session.get('admin_logged_in'):
+
+        return redirect('/admin-login')
+
+
+    return render_template_string(
+        STYLE + """
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+    <title>SchoolSafe Admin</title>
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+</head>
+
+<body>
+
+
+<header>
+
+    <h1>👨‍💼 SchoolSafe Admin</h1>
+
+    <p>Administrator Panel</p>
+
+</header>
+
+
+<div class="container">
+
+    <h2>Admin Menu</h2>
+
+
+    <div class="card-container">
+
+
+        <!-- TRACK REPORT -->
+
+        <div class="card">
+
+            <h3>🔎 Track Report</h3>
+
+            <p>
+                Search for a specific report using
+                its Report ID.
+            </p>
+
+            <a href="/status" class="btn">
+
+                Track Report
+
+            </a>
+
+        </div>
+
+
+        <!-- ADMIN DASHBOARD -->
+
+        <div class="card">
+
+            <h3>📋 Admin Dashboard</h3>
+
+            <p>
+                View all submitted reports and
+                update their status.
+            </p>
+
+            <a href="/admin-dashboard" class="btn">
+
+                Admin Dashboard
+
+            </a>
+
+        </div>
+
+
+    </div>
+
+
+    <br>
+
+
+    <a href="/logout" class="btn btn-danger">
+
+        Logout
+
+    </a>
+
+
+</div>
+
+
+</body>
+
+</html>
+
+"""
+    )
+
+
+# =========================================================
+# ADMIN DASHBOARD
+# =========================================================
+
+@app.route('/admin-dashboard')
+def admin_dashboard():
+
+    if not session.get('admin_logged_in'):
+
+        return redirect('/admin-login')
+
+
     conn = sqlite3.connect(DB_FILE)
+
     c = conn.cursor()
+
+
+    # GET ALL REPORTS
+    # Reports are NOT deleted.
 
     c.execute("""
         SELECT *
@@ -920,11 +1126,31 @@ def admin():
         ORDER BY id DESC
     """)
 
+
     reports = c.fetchall()
 
     conn.close()
 
+
     rows = ""
+
+
+    if not reports:
+
+        rows = """
+
+        <tr>
+
+            <td colspan="8" style="text-align:center;">
+
+                No reports submitted yet.
+
+            </td>
+
+        </tr>
+
+        """
+
 
     for report in reports:
 
@@ -933,31 +1159,31 @@ def admin():
         <tr>
 
             <td>
-                {report[1]}
+                {html.escape(report[1])}
             </td>
 
             <td>
-                {report[2]}
+                {html.escape(report[2])}
             </td>
 
             <td>
-                {report[3]}
+                {html.escape(report[3])}
             </td>
 
             <td>
-                {report[4]}
+                {html.escape(report[4])}
             </td>
 
             <td>
-                {report[5]}
+                {html.escape(report[5])}
             </td>
 
             <td>
-                {report[6]}
+                {html.escape(report[6])}
             </td>
 
             <td>
-                {report[7]}
+                {html.escape(report[7])}
             </td>
 
             <td>
@@ -969,27 +1195,19 @@ def admin():
 
                     <select name="status">
 
-                        <option
-                            {"selected" if report[7] == "Submitted" else ""}
-                        >
+                        <option>
                             Submitted
                         </option>
 
-                        <option
-                            {"selected" if report[7] == "Under Review" else ""}
-                        >
+                        <option>
                             Under Review
                         </option>
 
-                        <option
-                            {"selected" if report[7] == "In Progress" else ""}
-                        >
+                        <option>
                             In Progress
                         </option>
 
-                        <option
-                            {"selected" if report[7] == "Resolved" else ""}
-                        >
+                        <option>
                             Resolved
                         </option>
 
@@ -1000,7 +1218,9 @@ def admin():
                         type="submit"
                         class="btn"
                     >
+
                         Update
+
                     </button>
 
                 </form>
@@ -1010,6 +1230,7 @@ def admin():
         </tr>
 
         """
+
 
     return render_template_string(
         STYLE + f"""
@@ -1032,16 +1253,25 @@ def admin():
 
 <header>
 
-    <h1>👨‍💼 SchoolSafe Admin</h1>
+    <h1>📋 Admin Dashboard</h1>
 
-    <p>School Safety Reports</p>
+    <p>All Student Reports</p>
 
 </header>
 
 
-<div class="container" style="max-width:1200px;">
+<div class="container"
+     style="max-width:1200px;">
 
-    <h2>Reported Issues</h2>
+    <h2>Submitted Reports</h2>
+
+
+    <p>
+        All reports submitted by students are
+        stored here and will remain available
+        until they are manually removed from
+        the database.
+    </p>
 
 
     <table>
@@ -1050,7 +1280,7 @@ def admin():
 
             <th>Report ID</th>
 
-            <th>Reporter</th>
+            <th>Student</th>
 
             <th>Issue</th>
 
@@ -1069,14 +1299,17 @@ def admin():
 
         {rows}
 
+
     </table>
 
 
     <br>
 
 
-    <a href="/">
-        ← Back to Home
+    <a href="/admin" class="btn">
+
+        ← Admin Menu
+
     </a>
 
 
@@ -1092,16 +1325,24 @@ def admin():
 
 
 # =========================================================
-# UPDATE REPORT STATUS
+# UPDATE STATUS
 # =========================================================
 
 @app.route('/update/<int:id>', methods=['POST'])
 def update(id):
 
+    if not session.get('admin_logged_in'):
+
+        return redirect('/admin-login')
+
+
     status = request.form.get('status')
 
+
     conn = sqlite3.connect(DB_FILE)
+
     c = conn.cursor()
+
 
     c.execute("""
         UPDATE reports
@@ -1109,24 +1350,39 @@ def update(id):
         WHERE id = ?
     """, (status, id))
 
+
     conn.commit()
+
     conn.close()
 
-    return """
-    <script>
-        window.location.href = "/admin";
-    </script>
-    """
+
+    return redirect('/admin-dashboard')
 
 
 # =========================================================
-# RUN APPLICATION
+# LOGOUT
+# =========================================================
+
+@app.route('/logout')
+def logout():
+
+    session.clear()
+
+    return redirect('/')
+
+
+# =========================================================
+# RUN
 # =========================================================
 
 if __name__ == '__main__':
 
+    port = int(
+        os.environ.get("PORT", 5000)
+    )
+
     app.run(
         host="0.0.0.0",
-        port=5000,
+        port=port,
         debug=True
     )
