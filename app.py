@@ -5,13 +5,16 @@ import random
 import string
 import os
 import html
+import hmac
 
 app = Flask(__name__)
 
-# Secret key for login session
+# =========================================================
+# SECRET KEY
+# =========================================================
 app.secret_key = os.environ.get(
     "SECRET_KEY",
-    "schoolsafe-secret-key"
+    "schoolsafe-change-this-secret-key"
 )
 
 DB_FILE = "schoolsafe.db"
@@ -20,11 +23,8 @@ DB_FILE = "schoolsafe.db"
 # =========================================================
 # DATABASE SETUP
 # =========================================================
-
 def init_db():
-
     conn = sqlite3.connect(DB_FILE)
-
     c = conn.cursor()
 
     c.execute("""
@@ -52,7 +52,6 @@ init_db()
 # =========================================================
 # GENERATE REPORT ID
 # =========================================================
-
 def generate_report_id():
 
     while True:
@@ -67,7 +66,6 @@ def generate_report_id():
         report_id = "SS-" + code
 
         conn = sqlite3.connect(DB_FILE)
-
         c = conn.cursor()
 
         c.execute(
@@ -75,261 +73,1131 @@ def generate_report_id():
             (report_id,)
         )
 
-        existing = c.fetchone()
+        exists = c.fetchone()
 
         conn.close()
 
-        if not existing:
+        if not exists:
             return report_id
 
 
 # =========================================================
-# DESIGN
+# CHECK ADMIN LOGIN
 # =========================================================
+def is_admin():
+    return session.get("admin_logged_in", False)
 
+
+# =========================================================
+# STATUS COLORS
+# =========================================================
+def status_class(status):
+
+    return {
+        "Submitted": "submitted",
+        "Under Review": "review",
+        "In Progress": "progress",
+        "Resolved": "resolved"
+    }.get(status, "submitted")
+
+
+# =========================================================
+# URGENCY COLORS
+# =========================================================
+def urgency_class(urgency):
+
+    return {
+        "Low": "low",
+        "Medium": "medium",
+        "High": "high",
+        "Emergency": "emergency"
+    }.get(urgency, "medium")
+
+
+# =========================================================
+# PROFESSIONAL DESIGN
+# =========================================================
 STYLE = """
+
 <style>
+
+/* ================================
+   GENERAL
+================================ */
+
+:root {
+
+    --blue: #1261a0;
+    --blue-dark: #083b66;
+    --blue-light: #eaf4ff;
+    --cyan: #27a7e7;
+
+    --green: #168a57;
+    --orange: #e28a16;
+    --red: #c73636;
+
+    --text: #172033;
+    --muted: #667085;
+
+    --border: #dce6f0;
+
+    --bg: #f4f8fc;
+    --white: #ffffff;
+
+    --shadow:
+        0 18px 45px rgba(18, 61, 96, .12);
+}
+
 
 * {
     box-sizing: border-box;
 }
 
+
 body {
+
     margin: 0;
-    font-family: Arial, sans-serif;
-    background: #eef6ff;
-    color: #222;
+
+    font-family:
+        Inter,
+        Segoe UI,
+        Arial,
+        sans-serif;
+
+    color: var(--text);
+
+    background:
+
+        radial-gradient(
+            circle at 10% 0%,
+            rgba(39, 167, 231, .10),
+            transparent 28%
+        ),
+
+        radial-gradient(
+            circle at 90% 10%,
+            rgba(18, 97, 160, .10),
+            transparent 25%
+        ),
+
+        var(--bg);
 }
 
-header {
-    background: #1261a0;
+
+a {
+    color: inherit;
+}
+
+
+/* ================================
+   TOP BAR
+================================ */
+
+.topbar {
+
+    background:
+        linear-gradient(
+            135deg,
+            var(--blue-dark),
+            var(--blue),
+            #1885c7
+        );
+
     color: white;
-    padding: 25px;
-    text-align: center;
+
+    padding: 18px 5%;
+
+    display: flex;
+
+    justify-content: space-between;
+
+    align-items: center;
+
+    gap: 20px;
+
+    box-shadow:
+        0 8px 25px
+        rgba(8, 59, 102, .20);
 }
 
-header h1 {
+
+.brand {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 12px;
+}
+
+
+.brand-icon {
+
+    width: 46px;
+    height: 46px;
+
+    border-radius: 14px;
+
+    display: grid;
+
+    place-items: center;
+
+    background:
+        rgba(255,255,255,.16);
+
+    font-size: 24px;
+
+    border:
+        1px solid
+        rgba(255,255,255,.22);
+}
+
+
+.brand h1 {
+
+    font-size: 22px;
+
     margin: 0;
-    font-size: 32px;
 }
 
-header p {
-    margin: 8px 0 0;
+
+.brand small {
+
+    opacity: .82;
 }
+
+
+/* ================================
+   CONTAINER
+================================ */
 
 .container {
+
     width: 92%;
-    max-width: 850px;
-    margin: 40px auto;
-    background: white;
-    padding: 30px;
-    border-radius: 15px;
-    box-shadow: 0 5px 20px rgba(0,0,0,0.10);
+
+    max-width: 1050px;
+
+    margin: 38px auto;
+
+    background:
+        rgba(255,255,255,.96);
+
+    padding: 34px;
+
+    border:
+        1px solid
+        rgba(220,230,240,.9);
+
+    border-radius: 24px;
+
+    box-shadow:
+        var(--shadow);
 }
 
-h2 {
-    color: #1261a0;
+
+.wide {
+
+    max-width: 1400px;
 }
 
-p {
-    line-height: 1.6;
+
+/* ================================
+   HERO
+================================ */
+
+.hero {
+
+    text-align: center;
+
+    padding:
+        10px 0 5px;
 }
 
-.role-container {
-    display: flex;
+
+.hero h2 {
+
+    font-size: 34px;
+
+    margin:
+        5px 0 10px;
+
+    color:
+        var(--blue-dark);
+}
+
+
+.hero p {
+
+    max-width: 650px;
+
+    margin: 0 auto;
+
+    color: var(--muted);
+
+    line-height: 1.7;
+}
+
+
+/* ================================
+   CARDS
+================================ */
+
+.role-container,
+.menu-container,
+.stats {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            2,
+            minmax(0, 1fr)
+        );
+
     gap: 20px;
-    justify-content: center;
-    flex-wrap: wrap;
+
     margin-top: 30px;
 }
 
-.role-card {
-    width: 280px;
-    background: #f4f9ff;
-    border: 1px solid #d5e8fa;
-    padding: 30px;
-    border-radius: 15px;
-    text-align: center;
+
+.role-card,
+.menu-card {
+
+    background:
+        linear-gradient(
+            180deg,
+            #fff,
+            #f8fbff
+        );
+
+    border:
+        1px solid
+        var(--border);
+
+    padding: 28px;
+
+    border-radius: 20px;
+
+    transition: .2s;
+
+    position: relative;
+
+    overflow: hidden;
 }
 
-.role-card h3 {
-    color: #1261a0;
-    font-size: 22px;
+
+.role-card:hover,
+.menu-card:hover {
+
+    transform:
+        translateY(-4px);
+
+    box-shadow:
+        0 14px 30px
+        rgba(18,97,160,.12);
 }
 
-.role-card p {
-    color: #555;
+
+.role-card:before,
+.menu-card:before {
+
+    content: "";
+
+    position: absolute;
+
+    left: 0;
+
+    top: 0;
+
+    width: 100%;
+
+    height: 4px;
+
+    background:
+        linear-gradient(
+            90deg,
+            var(--blue),
+            var(--cyan)
+        );
 }
+
+
+.icon-circle {
+
+    width: 58px;
+
+    height: 58px;
+
+    border-radius: 18px;
+
+    background:
+        var(--blue-light);
+
+    display: grid;
+
+    place-items: center;
+
+    font-size: 27px;
+
+    margin-bottom: 14px;
+}
+
+
+h2,
+h3 {
+
+    color:
+        var(--blue-dark);
+}
+
+
+p {
+
+    line-height: 1.65;
+}
+
+
+.muted {
+
+    color:
+        var(--muted);
+}
+
+
+/* ================================
+   BUTTONS
+================================ */
 
 .btn {
-    display: inline-block;
-    background: #1261a0;
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 8px;
+
+    background:
+        linear-gradient(
+            135deg,
+            var(--blue),
+            #1885c7
+        );
+
     color: white;
-    padding: 13px 20px;
-    margin: 8px 5px 8px 0;
-    border-radius: 8px;
+
+    padding:
+        12px 18px;
+
+    margin:
+        8px 5px 0 0;
+
+    border-radius: 11px;
+
     text-decoration: none;
-    border: none;
+
+    border: 0;
+
     cursor: pointer;
+
     font-size: 15px;
+
+    font-weight: 700;
+
+    box-shadow:
+        0 7px 18px
+        rgba(18,97,160,.18);
 }
+
 
 .btn:hover {
-    background: #0b4778;
+
+    filter:
+        brightness(.94);
+
+    transform:
+        translateY(-1px);
 }
+
+
+.btn-secondary {
+
+    background:
+        #eef5fb;
+
+    color:
+        var(--blue-dark);
+
+    box-shadow: none;
+}
+
 
 .btn-danger {
-    background: #b52b2b;
+
+    background:
+        linear-gradient(
+            135deg,
+            #b52b2b,
+            #d44949
+        );
 }
 
-.btn-danger:hover {
-    background: #8d2020;
-}
 
-.btn-role {
+.btn-full {
+
     width: 100%;
-    font-size: 17px;
-    padding: 15px;
 }
+
+
+/* ================================
+   FORMS
+================================ */
 
 form {
+
     margin-top: 20px;
 }
 
-label {
-    display: block;
-    margin-top: 15px;
-    font-weight: bold;
+
+.form-grid {
+
+    display: grid;
+
+    grid-template-columns:
+        1fr 1fr;
+
+    gap:
+        0 18px;
 }
+
+
+.full {
+
+    grid-column:
+        1 / -1;
+}
+
+
+label {
+
+    display: block;
+
+    margin-top: 16px;
+
+    font-weight: 700;
+
+    font-size: 14px;
+}
+
 
 input,
 select,
 textarea {
+
     width: 100%;
-    padding: 12px;
+
+    padding:
+        13px 14px;
+
     margin-top: 7px;
-    border: 1px solid #ccc;
-    border-radius: 7px;
+
+    border:
+        1px solid
+        #ccd8e4;
+
+    border-radius: 11px;
+
     font-size: 15px;
+
+    background:
+        #fff;
+
+    outline: none;
+
+    transition: .2s;
 }
 
+
+input:focus,
+select:focus,
+textarea:focus {
+
+    border-color:
+        var(--cyan);
+
+    box-shadow:
+        0 0 0 4px
+        rgba(39,167,231,.10);
+}
+
+
 textarea {
-    height: 140px;
+
+    min-height: 145px;
+
     resize: vertical;
 }
 
-.report-id {
-    background: #e4f1ff;
-    color: #1261a0;
-    padding: 20px;
-    border-radius: 10px;
-    text-align: center;
-    font-size: 30px;
-    font-weight: bold;
-    margin: 20px 0;
+
+/* ================================
+   NOTICE
+================================ */
+
+.notice {
+
+    background:
+        #f0f8ff;
+
+    border:
+        1px solid
+        #cfe8fb;
+
+    padding:
+        17px 18px;
+
+    border-radius:
+        14px;
+
+    margin-top:
+        18px;
+
+    color:
+        #31546f;
 }
+
+
+/* ================================
+   SUCCESS
+================================ */
+
+.success-box {
+
+    text-align:
+        center;
+
+    background:
+        linear-gradient(
+            180deg,
+            #f2fff9,
+            #fff
+        );
+
+    border:
+        1px solid
+        #c8eddc;
+
+    padding:
+        28px;
+
+    border-radius:
+        20px;
+}
+
+
+.report-id {
+
+    background:
+        linear-gradient(
+            135deg,
+            #e9f5ff,
+            #f6fbff
+        );
+
+    color:
+        var(--blue-dark);
+
+    padding:
+        18px;
+
+    border-radius:
+        14px;
+
+    text-align:
+        center;
+
+    font-size:
+        30px;
+
+    font-weight:
+        800;
+
+    letter-spacing:
+        2px;
+
+    margin:
+        18px 0;
+
+    border:
+        1px dashed
+        #9cccf0;
+}
+
 
 .success {
-    color: green;
-    font-weight: bold;
+
+    color:
+        var(--green);
+
+    font-weight:
+        700;
 }
+
 
 .error {
-    color: red;
-    font-weight: bold;
+
+    color:
+        var(--red);
+
+    font-weight:
+        700;
 }
+
+
+/* ================================
+   INFORMATION
+================================ */
 
 .info {
-    background: #eef7ff;
-    padding: 20px;
-    border-radius: 10px;
-    margin-top: 20px;
+
+    background:
+        #f8fbff;
+
+    padding:
+        22px;
+
+    border-radius:
+        17px;
+
+    margin-top:
+        20px;
+
+    border:
+        1px solid
+        var(--border);
 }
 
-.status {
-    font-weight: bold;
+
+/* ================================
+   BADGES
+================================ */
+
+.status,
+.badge {
+
+    display:
+        inline-flex;
+
+    padding:
+        5px 10px;
+
+    border-radius:
+        999px;
+
+    font-weight:
+        800;
+
+    font-size:
+        12px;
 }
 
-.menu-container {
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-    margin-top: 25px;
+
+.submitted {
+
+    background:
+        #eaf3ff;
+
+    color:
+        #24639a;
 }
 
-.menu-card {
-    flex: 1;
-    min-width: 250px;
-    background: #f4f9ff;
-    border: 1px solid #d5e8fa;
-    padding: 25px;
-    border-radius: 12px;
+
+.review {
+
+    background:
+        #fff5d9;
+
+    color:
+        #946300;
 }
 
-.menu-card h3 {
-    color: #1261a0;
+
+.progress {
+
+    background:
+        #efe9ff;
+
+    color:
+        #6942a5;
 }
+
+
+.resolved {
+
+    background:
+        #e5f8ef;
+
+    color:
+        #17734b;
+}
+
+
+.low {
+
+    background:
+        #eaf7ef;
+
+    color:
+        #237449;
+}
+
+
+.medium {
+
+    background:
+        #fff4d8;
+
+    color:
+        #956300;
+}
+
+
+.high {
+
+    background:
+        #ffe9d9;
+
+    color:
+        #a74d10;
+}
+
+
+.emergency {
+
+    background:
+        #ffe3e3;
+
+    color:
+        #a92727;
+}
+
+
+/* ================================
+   ADMIN STATISTICS
+================================ */
+
+.stats {
+
+    grid-template-columns:
+        repeat(
+            4,
+            minmax(0, 1fr)
+        );
+
+    margin-top:
+        22px;
+}
+
+
+.stat {
+
+    background:
+        #fff;
+
+    border:
+        1px solid
+        var(--border);
+
+    border-radius:
+        16px;
+
+    padding:
+        18px;
+}
+
+
+.stat span {
+
+    display:
+        block;
+
+    color:
+        var(--muted);
+
+    font-size:
+        13px;
+}
+
+
+.stat strong {
+
+    font-size:
+        28px;
+
+    color:
+        var(--blue-dark);
+}
+
+
+/* ================================
+   TABLE
+================================ */
+
+.table-wrap {
+
+    overflow-x:
+        auto;
+
+    border:
+        1px solid
+        var(--border);
+
+    border-radius:
+        15px;
+
+    margin-top:
+        20px;
+}
+
 
 table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-    font-size: 14px;
+
+    width:
+        100%;
+
+    border-collapse:
+        collapse;
+
+    min-width:
+        1050px;
+
+    font-size:
+        14px;
 }
 
+
 th {
-    background: #1261a0;
-    color: white;
+
+    background:
+        var(--blue-dark);
+
+    color:
+        #fff;
+
+    text-align:
+        left;
 }
+
 
 th,
 td {
-    border: 1px solid #ddd;
-    padding: 10px;
-    text-align: left;
+
+    border-bottom:
+        1px solid
+        var(--border);
+
+    padding:
+        12px;
+
+    vertical-align:
+        top;
 }
 
-footer {
-    text-align: center;
-    margin: 30px;
-    color: #666;
+
+tr:nth-child(even) {
+
+    background:
+        #f9fbfd;
 }
 
-@media(max-width: 600px) {
+
+/* ================================
+   SEARCH
+================================ */
+
+.searchbar {
+
+    display:
+        flex;
+
+    gap:
+        10px;
+
+    margin-top:
+        18px;
+}
+
+
+.searchbar input {
+
+    margin:
+        0;
+
+    flex:
+        1;
+}
+
+
+/* ================================
+   STEPS
+================================ */
+
+.step-list {
+
+    display:
+        grid;
+
+    gap:
+        10px;
+
+    margin-top:
+        16px;
+}
+
+
+.step {
+
+    display:
+        flex;
+
+    gap:
+        12px;
+
+    align-items:
+        flex-start;
+}
+
+
+.step-num {
+
+    min-width:
+        30px;
+
+    height:
+        30px;
+
+    border-radius:
+        50%;
+
+    background:
+        var(--blue);
+
+    color:
+        #fff;
+
+    display:
+        grid;
+
+    place-items:
+        center;
+
+    font-weight:
+        800;
+
+    font-size:
+        13px;
+}
+
+
+/* ================================
+   FOOTER
+================================ */
+
+.footer {
+
+    text-align:
+        center;
+
+    padding:
+        25px;
+
+    color:
+        #738094;
+
+    font-size:
+        13px;
+}
+
+
+/* ================================
+   MOBILE
+================================ */
+
+@media(max-width:800px) {
+
+    .role-container,
+    .menu-container,
+    .stats,
+    .form-grid {
+
+        grid-template-columns:
+            1fr;
+    }
+
+    .full {
+
+        grid-column:
+            auto;
+    }
 
     .container {
-        width: 95%;
-        padding: 20px;
+
+        padding:
+            23px;
+
+        margin:
+            22px auto;
     }
 
-    header h1 {
-        font-size: 26px;
+    .hero h2 {
+
+        font-size:
+            28px;
     }
 
-    table {
-        font-size: 12px;
+    .topbar {
+
+        padding:
+            15px 4%;
+    }
+}
+
+
+@media(max-width:520px) {
+
+    .searchbar {
+
+        flex-direction:
+            column;
     }
 
-    th,
-    td {
-        padding: 7px;
-    }
+    .btn {
 
+        width:
+            100%;
+    }
 }
 
 </style>
+
 """
 
 
 # =========================================================
-# FIRST PAGE - CHOOSE ROLE
+# PAGE TEMPLATE
 # =========================================================
-
-@app.route('/')
-def index():
+def page(
+    title,
+    body,
+    top_title="🏫 SchoolSafe",
+    top_subtitle="School Issue Reporting System"
+):
 
     return render_template_string(
-        STYLE + """
+
+        STYLE +
+
+        f"""
 
 <!DOCTYPE html>
 
@@ -337,90 +1205,54 @@ def index():
 
 <head>
 
-    <title>SchoolSafe</title>
+<title>
+{html.escape(title)}
+</title>
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1">
+<meta
+name="viewport"
+content="width=device-width, initial-scale=1"
+>
 
 </head>
+
 
 <body>
 
 
-<header>
+<header class="topbar">
 
-    <h1>🏫 SchoolSafe</h1>
+    <div class="brand">
 
-    <p>School Issue Reporting System</p>
+        <div class="brand-icon">
+            🛡️
+        </div>
+
+        <div>
+
+            <h1>
+                {top_title}
+            </h1>
+
+            <small>
+                {top_subtitle}
+            </small>
+
+        </div>
+
+    </div>
 
 </header>
 
 
-<div class="container">
-
-    <h2 style="text-align:center;">
-        Welcome to SchoolSafe
-    </h2>
+{body}
 
 
-    <p style="text-align:center;">
-        Please select your role to continue.
-    </p>
+<footer class="footer">
 
+    SchoolSafe © {datetime.date.today().year}
 
-    <div class="role-container">
-
-
-        <!-- STUDENT -->
-
-        <div class="role-card">
-
-            <h3>👨‍🎓 Student</h3>
-
-            <p>
-                Report a school issue or
-                track your submitted report.
-            </p>
-
-            <a
-                href="/student"
-                class="btn btn-role"
-            >
-                I am a Student
-            </a>
-
-        </div>
-
-
-        <!-- ADMIN -->
-
-        <div class="role-card">
-
-            <h3>👨‍💼 Admin</h3>
-
-            <p>
-                Login to manage and monitor
-                student reports.
-            </p>
-
-            <a
-                href="/admin-login"
-                class="btn btn-role"
-            >
-                I am an Admin
-            </a>
-
-        </div>
-
-
-    </div>
-
-</div>
-
-
-<footer>
-
-    SchoolSafe © 2026
+    • Safer schools, faster action.
 
 </footer>
 
@@ -434,107 +1266,281 @@ def index():
 
 
 # =========================================================
-# STUDENT PAGE
+# HOME / ROLE SELECTION
 # =========================================================
+@app.route("/")
+def index():
 
-@app.route('/student')
-def student():
+    return page(
+        "SchoolSafe",
+        """
 
-    return render_template_string(
-        STYLE + """
-
-<!DOCTYPE html>
-
-<html>
-
-<head>
-
-    <title>Student - SchoolSafe</title>
-
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1">
-
-</head>
-
-<body>
+<main class="container">
 
 
-<header>
+<section class="hero">
 
-    <h1>👨‍🎓 Student</h1>
-
-    <p>SchoolSafe</p>
-
-</header>
-
-
-<div class="container">
-
-    <h2>What would you like to do?</h2>
-
-
-    <div class="menu-container">
-
-
-        <!-- REPORT -->
-
-        <div class="menu-card">
-
-            <h3>🚨 Report an Issue</h3>
-
-            <p>
-                Report a damaged, unsafe, or
-                problematic school facility.
-            </p>
-
-            <a
-                href="/report"
-                class="btn"
-            >
-                Report an Issue
-            </a>
-
-        </div>
-
-
-        <!-- TRACK -->
-
-        <div class="menu-card">
-
-            <h3>🔎 Track Report</h3>
-
-            <p>
-                Check the current status of
-                your submitted report.
-            </p>
-
-            <a
-                href="/status"
-                class="btn"
-            >
-                Track Report
-            </a>
-
-        </div>
-
-
+    <div
+        class="icon-circle"
+        style="margin:0 auto"
+    >
+        🛡️
     </div>
 
 
-    <br>
+    <h2>
+        Welcome to SchoolSafe
+    </h2>
 
 
-    <a href="/" class="btn">
-        ← Back
+    <p>
+
+        A simple and secure way to
+        report school facility issues
+        and monitor their progress.
+
+    </p>
+
+</section>
+
+
+<div class="role-container">
+
+
+<!-- STUDENT -->
+
+<div class="role-card">
+
+    <div class="icon-circle">
+        🎓
+    </div>
+
+
+    <h3>
+        Student Portal
+    </h3>
+
+
+    <p class="muted">
+
+        Report a school issue or
+        check the status of a
+        submitted report.
+
+    </p>
+
+
+    <a
+        href="/student"
+        class="btn btn-full"
+    >
+
+        Continue as Student →
+
     </a>
+
+</div>
+
+
+<!-- ADMIN -->
+
+<div class="role-card">
+
+    <div class="icon-circle">
+        🔐
+    </div>
+
+
+    <h3>
+        Administrator Portal
+    </h3>
+
+
+    <p class="muted">
+
+        Review reports,
+        monitor urgent concerns,
+        and update report status.
+
+    </p>
+
+
+    <a
+        href="/admin-login"
+        class="btn btn-full"
+    >
+
+        Continue as Admin →
+
+    </a>
+
+</div>
 
 
 </div>
 
 
-</body>
+<div class="notice">
 
-</html>
+<strong>
+💡 How SchoolSafe works:
+</strong>
+
+
+Students submit a report and
+receive a unique Report ID.
+
+Administrators review the report
+and update its status so students
+can track its progress.
+
+
+</div>
+
+
+</main>
+
+"""
+    )
+
+
+# =========================================================
+# STUDENT PAGE
+# =========================================================
+@app.route("/student")
+def student():
+
+    return page(
+        "Student Portal",
+        """
+
+<main class="container">
+
+
+<section class="hero">
+
+    <div
+        class="icon-circle"
+        style="margin:0 auto"
+    >
+        🎓
+    </div>
+
+
+    <h2>
+        Student Portal
+    </h2>
+
+
+    <p>
+        What would you like to do today?
+    </p>
+
+</section>
+
+
+<div class="menu-container">
+
+
+<!-- REPORT -->
+
+<div class="menu-card">
+
+    <div class="icon-circle">
+        🚨
+    </div>
+
+
+    <h3>
+        Report an Issue
+    </h3>
+
+
+    <p class="muted">
+
+        Tell the school about a
+        damaged, unsafe, or
+        problematic facility.
+
+    </p>
+
+
+    <a
+        href="/report"
+        class="btn"
+    >
+
+        Create a Report →
+
+    </a>
+
+</div>
+
+
+<!-- TRACK -->
+
+<div class="menu-card">
+
+    <div class="icon-circle">
+        🔎
+    </div>
+
+
+    <h3>
+        Track Report
+    </h3>
+
+
+    <p class="muted">
+
+        Enter your Report ID
+        to see the latest status
+        of your concern.
+
+    </p>
+
+
+    <a
+        href="/status"
+        class="btn"
+    >
+
+        Track My Report →
+
+    </a>
+
+</div>
+
+
+</div>
+
+
+<div class="notice">
+
+<strong>
+🔒 Privacy reminder:
+</strong>
+
+Only submit information needed
+to describe the issue.
+
+Do not include passwords or
+other sensitive personal information.
+
+</div>
+
+
+<a
+    href="/"
+    class="btn btn-secondary"
+>
+
+    ← Back to Home
+
+</a>
+
+
+</main>
 
 """
     )
@@ -543,86 +1549,106 @@ def student():
 # =========================================================
 # REPORT AN ISSUE
 # =========================================================
-
-@app.route('/report', methods=['GET', 'POST'])
+@app.route("/report", methods=["GET", "POST"])
 def report():
 
-    if request.method == 'POST':
+    if request.method == "POST":
 
         reporter = request.form.get(
-            'reporter',
-            ''
+            "reporter",
+            ""
         ).strip()
+
 
         issue_type = request.form.get(
-            'issue_type',
-            ''
+            "issue_type",
+            ""
         ).strip()
+
 
         location = request.form.get(
-            'location',
-            ''
+            "location",
+            ""
         ).strip()
+
 
         description = request.form.get(
-            'description',
-            ''
+            "description",
+            ""
         ).strip()
+
 
         urgency = request.form.get(
-            'urgency',
-            ''
+            "urgency",
+            ""
         ).strip()
 
 
-        if (
-            not reporter
-            or not issue_type
-            or not location
-            or not description
-            or not urgency
-        ):
+        if not all([
+            reporter,
+            issue_type,
+            location,
+            description,
+            urgency
+        ]):
 
-            return render_template_string(
-                STYLE + """
-
-                <div class="container">
-
-                    <h2>❌ Incomplete Report</h2>
-
-                    <p class="error">
-                        Please fill in all required fields.
-                    </p>
-
-                    <a
-                        href="/report"
-                        class="btn"
-                    >
-                        ← Go Back
-                    </a>
-
-                </div>
-
+            return page(
+                "Incomplete Report",
                 """
+
+<main class="container">
+
+<h2>
+⚠️ Incomplete Report
+</h2>
+
+
+<p class="error">
+
+Please fill in all required
+fields before submitting.
+
+</p>
+
+
+<a
+    href="/report"
+    class="btn"
+>
+
+← Go Back
+
+</a>
+
+</main>
+
+"""
             )
 
 
         report_id = generate_report_id()
 
-        today = datetime.date.today().isoformat()
 
-        now = datetime.datetime.now().strftime(
-            "%H:%M"
-        )
+        now_dt = datetime.datetime.now()
+
+
+        today = now_dt.date().isoformat()
+
+
+        now = now_dt.strftime("%H:%M")
 
 
         conn = sqlite3.connect(DB_FILE)
 
+
         c = conn.cursor()
 
 
-        c.execute("""
+        c.execute(
+            """
+
             INSERT INTO reports
+
             (
                 report_id,
                 reporter,
@@ -634,269 +1660,367 @@ def report():
                 date_reported,
                 time_reported
             )
+
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
 
-            report_id,
-            reporter,
-            issue_type,
-            location,
-            description,
-            urgency,
-            "Submitted",
-            today,
-            now
+            """,
 
-        ))
+            (
+                report_id,
+                reporter,
+                issue_type,
+                location,
+                description,
+                urgency,
+                "Submitted",
+                today,
+                now
+            )
+        )
 
 
         conn.commit()
 
+
         conn.close()
 
 
-        return render_template_string(
-            STYLE + f"""
+        return page(
+            "Report Submitted",
+            f"""
 
-            <div class="container">
+<main class="container">
 
-                <h2>✅ Report Submitted!</h2>
 
-                <p class="success">
-                    Your issue has been successfully
-                    submitted.
-                </p>
+<div class="success-box">
 
 
-                <p>
-                    Your Report ID is:
-                </p>
+<div
+    class="icon-circle"
+    style="margin:0 auto"
+>
 
+    ✅
 
-                <div class="report-id">
+</div>
 
-                    {html.escape(report_id)}
 
-                </div>
+<h2>
 
+Report Submitted Successfully!
 
-                <p>
-                    Please save your Report ID.
-                    You can use it to track your report.
-                </p>
+</h2>
 
 
-                <a
-                    href="/status"
-                    class="btn"
-                >
-                    🔎 Track Report
-                </a>
+<p class="success">
 
+Your school issue has been recorded.
 
-                <a
-                    href="/student"
-                    class="btn"
-                >
-                    🏠 Student Page
-                </a>
+</p>
 
-            </div>
 
-            """
-        )
+<p>
 
+Your unique Report ID is:
 
-    return render_template_string(
-        STYLE + """
+</p>
 
-<!DOCTYPE html>
 
-<html>
+<div class="report-id">
 
-<head>
+{html.escape(report_id)}
 
-    <title>Report an Issue</title>
+</div>
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1">
 
-</head>
+<p class="muted">
 
-<body>
+<strong>
+Save this ID.
+</strong>
 
+You will need it to track
+your report.
 
-<header>
+</p>
 
-    <h1>🚨 Report an Issue</h1>
 
-    <p>SchoolSafe</p>
+<a
+    href="/status"
+    class="btn"
+>
 
-</header>
+🔎 Track Report
 
+</a>
 
-<div class="container">
 
-    <h2>Submit Your Report</h2>
+<a
+    href="/student"
+    class="btn btn-secondary"
+>
 
+🏠 Student Portal
 
-    <form method="POST">
-
-
-        <label>
-            Your Name
-        </label>
-
-        <input
-            type="text"
-            name="reporter"
-            placeholder="Enter your name"
-            required
-        >
-
-
-        <label>
-            Type of Issue
-        </label>
-
-        <select
-            name="issue_type"
-            required
-        >
-
-            <option value="">
-                -- Select Issue --
-            </option>
-
-            <option>
-                Broken Chair
-            </option>
-
-            <option>
-                Broken Table
-            </option>
-
-            <option>
-                Broken Electric Fan
-            </option>
-
-            <option>
-                Broken Light
-            </option>
-
-            <option>
-                Damaged Door
-            </option>
-
-            <option>
-                Broken Window
-            </option>
-
-            <option>
-                Electrical Problem
-            </option>
-
-            <option>
-                Comfort Room Problem
-            </option>
-
-            <option>
-                Roof Damage
-            </option>
-
-            <option>
-                Slippery Floor
-            </option>
-
-            <option>
-                Other
-            </option>
-
-        </select>
-
-
-        <label>
-            Location
-        </label>
-
-        <input
-            type="text"
-            name="location"
-            placeholder="Example: Room 204"
-            required
-        >
-
-
-        <label>
-            Description
-        </label>
-
-        <textarea
-            name="description"
-            placeholder="Describe the problem..."
-            required
-        ></textarea>
-
-
-        <label>
-            Urgency
-        </label>
-
-        <select
-            name="urgency"
-            required
-        >
-
-            <option value="">
-                -- Select Urgency --
-            </option>
-
-            <option>
-                Low
-            </option>
-
-            <option>
-                Medium
-            </option>
-
-            <option>
-                High
-            </option>
-
-            <option>
-                Emergency
-            </option>
-
-        </select>
-
-
-        <button
-            type="submit"
-            class="btn"
-        >
-
-            🚨 Submit Report
-
-        </button>
-
-
-    </form>
-
-
-    <br>
-
-
-    <a href="/student">
-        ← Back to Student Page
-    </a>
+</a>
 
 
 </div>
 
 
-</body>
+</main>
 
-</html>
+"""
+        )
+
+
+    return page(
+        "Report an Issue",
+        """
+
+<main class="container">
+
+
+<section class="hero">
+
+
+<div
+    class="icon-circle"
+    style="margin:0 auto"
+>
+
+🚨
+
+</div>
+
+
+<h2>
+
+Report a School Issue
+
+</h2>
+
+
+<p>
+
+Please provide accurate
+information so the concern
+can be reviewed quickly.
+
+</p>
+
+
+</section>
+
+
+<form
+    method="POST"
+    onsubmit="return confirm(
+        'Are you sure you want to submit this report?'
+    );"
+>
+
+
+<div class="form-grid">
+
+
+<div>
+
+<label>
+Your Name *
+</label>
+
+
+<input
+    type="text"
+    name="reporter"
+    placeholder="Enter your name"
+    maxlength="100"
+    required
+>
+
+</div>
+
+
+<div>
+
+<label>
+Type of Issue *
+</label>
+
+
+<select
+    name="issue_type"
+    required
+>
+
+<option value="">
+-- Select Issue --
+</option>
+
+<option>
+Broken Chair
+</option>
+
+<option>
+Broken Table
+</option>
+
+<option>
+Broken Electric Fan
+</option>
+
+<option>
+Broken Light
+</option>
+
+<option>
+Damaged Door
+</option>
+
+<option>
+Broken Window
+</option>
+
+<option>
+Electrical Problem
+</option>
+
+<option>
+Comfort Room Problem
+</option>
+
+<option>
+Roof Damage
+</option>
+
+<option>
+Slippery Floor
+</option>
+
+<option>
+Other
+</option>
+
+</select>
+
+</div>
+
+
+<div>
+
+<label>
+Location *
+</label>
+
+
+<input
+    type="text"
+    name="location"
+    placeholder="Example: Room 204"
+    maxlength="120"
+    required
+>
+
+</div>
+
+
+<div>
+
+<label>
+Urgency *
+</label>
+
+
+<select
+    name="urgency"
+    required
+>
+
+<option value="">
+-- Select Urgency --
+</option>
+
+<option>
+Low
+</option>
+
+<option>
+Medium
+</option>
+
+<option>
+High
+</option>
+
+<option>
+Emergency
+</option>
+
+</select>
+
+</div>
+
+
+<div class="full">
+
+<label>
+Description *
+</label>
+
+
+<textarea
+    name="description"
+    placeholder="Describe what happened, where it is, and why it needs attention..."
+    maxlength="2000"
+    required
+></textarea>
+
+</div>
+
+
+</div>
+
+
+<div class="notice">
+
+<strong>
+Before submitting:
+</strong>
+
+Check the location,
+issue type, and urgency.
+
+Accurate details help
+administrators respond appropriately.
+
+</div>
+
+
+<button
+    type="submit"
+    class="btn"
+>
+
+🚨 Submit Report
+
+</button>
+
+
+<a
+    href="/student"
+    class="btn btn-secondary"
+>
+
+Cancel
+
+</a>
+
+
+</form>
+
+
+</main>
 
 """
     )
@@ -905,34 +2029,43 @@ def report():
 # =========================================================
 # TRACK REPORT
 # =========================================================
-
-@app.route('/status', methods=['GET', 'POST'])
+@app.route("/status", methods=["GET", "POST"])
 def status():
 
     result = ""
 
 
-    if request.method == 'POST':
+    if request.method == "POST":
 
         report_id = request.form.get(
-            'report_id',
-            ''
-        ).strip()
+            "report_id",
+            ""
+        ).strip().upper()
 
 
         conn = sqlite3.connect(DB_FILE)
 
+
         c = conn.cursor()
 
 
-        c.execute("""
+        c.execute(
+            """
+
             SELECT *
+
             FROM reports
+
             WHERE report_id = ?
-        """, (report_id,))
+
+            """,
+
+            (report_id,)
+        )
 
 
         report_data = c.fetchone()
+
 
         conn.close()
 
@@ -941,165 +2074,300 @@ def status():
 
             result = f"""
 
-            <div class="info">
-
-                <h2>Report Found ✅</h2>
+<div class="info">
 
 
-                <p>
-                    <strong>Report ID:</strong>
-                    {html.escape(report_data[1])}
-                </p>
+<h2>
+Report Found ✅
+</h2>
 
 
-                <p>
-                    <strong>Issue:</strong>
-                    {html.escape(report_data[3])}
-                </p>
+<p>
+
+<strong>
+Report ID:
+</strong>
+
+{html.escape(report_data[1])}
+
+</p>
 
 
-                <p>
-                    <strong>Location:</strong>
-                    {html.escape(report_data[4])}
-                </p>
+<p>
+
+<strong>
+Issue:
+</strong>
+
+{html.escape(report_data[3])}
+
+</p>
 
 
-                <p>
-                    <strong>Description:</strong>
-                    {html.escape(report_data[5])}
-                </p>
+<p>
+
+<strong>
+Location:
+</strong>
+
+{html.escape(report_data[4])}
+
+</p>
 
 
-                <p>
-                    <strong>Urgency:</strong>
-                    {html.escape(report_data[6])}
-                </p>
+<p>
+
+<strong>
+Description:
+</strong>
+
+{html.escape(report_data[5])}
+
+</p>
 
 
-                <p>
-                    <strong>Status:</strong>
+<p>
 
-                    <span class="status">
-                        {html.escape(report_data[7])}
-                    </span>
-
-                </p>
+<strong>
+Urgency:
+</strong>
 
 
-                <p>
-                    <strong>Date Reported:</strong>
-                    {html.escape(report_data[8])}
-                </p>
+<span class="badge {urgency_class(report_data[6])}">
+
+{html.escape(report_data[6])}
+
+</span>
 
 
-                <p>
-                    <strong>Time Reported:</strong>
-                    {html.escape(report_data[9])}
-                </p>
+</p>
 
-            </div>
 
-            """
+<p>
+
+<strong>
+Status:
+</strong>
+
+
+<span class="status {status_class(report_data[7])}">
+
+{html.escape(report_data[7])}
+
+</span>
+
+
+</p>
+
+
+<p>
+
+<strong>
+Date Reported:
+</strong>
+
+{html.escape(report_data[8])}
+
+</p>
+
+
+<p>
+
+<strong>
+Time Reported:
+</strong>
+
+{html.escape(report_data[9])}
+
+</p>
+
+
+<div class="step-list">
+
+
+<div class="step">
+
+<span class="step-num">
+1
+</span>
+
+<span>
+
+<strong>
+Submitted
+</strong>
+
+— Your report has been received.
+
+</span>
+
+</div>
+
+
+<div class="step">
+
+<span class="step-num">
+2
+</span>
+
+<span>
+
+<strong>
+Under Review
+</strong>
+
+— An administrator is checking the concern.
+
+</span>
+
+</div>
+
+
+<div class="step">
+
+<span class="step-num">
+3
+</span>
+
+<span>
+
+<strong>
+In Progress
+</strong>
+
+— Action is being taken.
+
+</span>
+
+</div>
+
+
+<div class="step">
+
+<span class="step-num">
+4
+</span>
+
+<span>
+
+<strong>
+Resolved
+</strong>
+
+— The reported concern has been addressed.
+
+</span>
+
+</div>
+
+
+</div>
+
+
+</div>
+
+"""
 
 
         else:
 
             result = """
 
-            <p class="error">
+<p class="error">
 
-                ❌ Report ID not found.
+❌ Report ID not found.
 
-            </p>
+Please check the ID and
+try again.
 
-            """
+</p>
 
-
-    return render_template_string(
-        STYLE + f"""
-
-<!DOCTYPE html>
-
-<html>
-
-<head>
-
-    <title>Track Report</title>
-
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1">
-
-</head>
-
-<body>
+"""
 
 
-<header>
+    return page(
+        "Track Report",
+        f"""
 
-    <h1>🔎 Track Report</h1>
-
-    <p>SchoolSafe</p>
-
-</header>
+<main class="container">
 
 
-<div class="container">
-
-    <h2>Track Your Report</h2>
+<section class="hero">
 
 
-    <p>
-        Enter your Report ID to check
-        the current status.
-    </p>
+<div
+    class="icon-circle"
+    style="margin:0 auto"
+>
 
-
-    <form method="POST">
-
-
-        <label>
-            Report ID
-        </label>
-
-
-        <input
-            type="text"
-            name="report_id"
-            placeholder="Example: SS-A1B2C3"
-            required
-        >
-
-
-        <button
-            type="submit"
-            class="btn"
-        >
-
-            🔎 Track Report
-
-        </button>
-
-
-    </form>
-
-
-    {result}
-
-
-    <br>
-
-
-    <a href="/student">
-        ← Back to Student Page
-    </a>
-
+🔎
 
 </div>
 
 
-</body>
+<h2>
 
-</html>
+Track Your Report
+
+</h2>
+
+
+<p>
+
+Enter the Report ID you received
+after submitting your concern.
+
+</p>
+
+
+</section>
+
+
+<form method="POST">
+
+
+<label>
+
+Report ID *
+
+</label>
+
+
+<input
+    type="text"
+    name="report_id"
+    placeholder="Example: SS-A1B2C3"
+    required
+>
+
+
+<button
+    type="submit"
+    class="btn"
+>
+
+🔎 Check Status
+
+</button>
+
+
+<a
+    href="/student"
+    class="btn btn-secondary"
+>
+
+← Student Portal
+
+</a>
+
+
+</form>
+
+
+{result}
+
+
+</main>
 
 """
     )
@@ -1108,145 +2376,200 @@ def status():
 # =========================================================
 # ADMIN LOGIN
 # =========================================================
-
-@app.route('/admin-login', methods=['GET', 'POST'])
+@app.route(
+    "/admin-login",
+    methods=["GET", "POST"]
+)
 def admin_login():
 
     message = ""
 
 
-    if request.method == 'POST':
+    if request.method == "POST":
 
         username = request.form.get(
-            'username',
-            ''
+            "username",
+            ""
         ).strip()
+
 
         password = request.form.get(
-            'password',
-            ''
+            "password",
+            ""
         ).strip()
 
 
-        # =================================================
-        # ADMIN ACCOUNT
-        # =================================================
-
         if (
-            username == "admin"
-            and password == "admin123"
+
+            hmac.compare_digest(
+                username,
+                "admin"
+            )
+
+            and
+
+            hmac.compare_digest(
+                password,
+                "admin123"
+            )
+
         ):
 
-            session['admin_logged_in'] = True
-
-            return redirect('/admin')
-
-
-        else:
-
-            message = """
-
-            <p class="error">
-
-                ❌ Incorrect username or password.
-
-            </p>
-
-            """
+            session[
+                "admin_logged_in"
+            ] = True
 
 
-    return render_template_string(
-        STYLE + f"""
-
-<!DOCTYPE html>
-
-<html>
-
-<head>
-
-    <title>Admin Login</title>
-
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1">
-
-</head>
-
-<body>
+            return redirect("/admin")
 
 
-<header>
+        message = """
 
-    <h1>👨‍💼 Admin Login</h1>
+<p class="error">
 
-    <p>SchoolSafe</p>
+❌ Incorrect username or password.
 
-</header>
+</p>
 
-
-<div class="container">
-
-    <h2>Administrator Login</h2>
+"""
 
 
-    {message}
+    return page(
+        "Admin Login",
+        f"""
+
+<main
+    class="container"
+    style="max-width:560px"
+>
 
 
-    <form method="POST">
+<section class="hero">
 
 
-        <label>
-            Username
-        </label>
+<div
+    class="icon-circle"
+    style="margin:0 auto"
+>
+
+🔐
+
+</div>
 
 
-        <input
-            type="text"
-            name="username"
-            placeholder="Enter admin username"
-            required
-        >
+<h2>
+
+Administrator Login
+
+</h2>
 
 
-        <label>
-            Password
-        </label>
+<p>
+
+Authorized personnel only.
+
+</p>
 
 
-        <input
-            type="password"
-            name="password"
-            placeholder="Enter admin password"
-            required
-        >
+</section>
 
 
-        <button
-            type="submit"
-            class="btn"
-        >
-
-            🔐 Login
-
-        </button>
+{message}
 
 
-    </form>
+<form method="POST">
 
 
-    <br>
+<label>
+
+Username *
+
+</label>
 
 
-    <a href="/">
-        ← Back to Role Selection
-    </a>
+<input
+    type="text"
+    name="username"
+    placeholder="Enter admin username"
+    required
+>
+
+
+<label>
+
+Password *
+
+</label>
+
+
+<input
+    type="password"
+    name="password"
+    placeholder="Enter admin password"
+    required
+>
+
+
+<button
+    type="submit"
+    class="btn btn-full"
+>
+
+🔐 Login Securely
+
+</button>
+
+
+</form>
+
+
+<div class="notice">
+
+
+<strong>
+Demo account:
+</strong>
+
+
+Username:
+
+<code>
+admin
+</code>
+
+
+<br>
+
+
+Password:
+
+<code>
+admin123
+</code>
+
+
+<br><br>
+
+
+Change these credentials
+before using the system
+in a real school environment.
 
 
 </div>
 
 
-</body>
+<a
+    href="/"
+    class="btn btn-secondary"
+>
 
-</html>
+← Back to Home
+
+</a>
+
+
+</main>
 
 """
     )
@@ -1255,155 +2578,355 @@ def admin_login():
 # =========================================================
 # ADMIN MENU
 # =========================================================
-
-@app.route('/admin')
+@app.route("/admin")
 def admin():
 
-    if not session.get('admin_logged_in'):
+    if not is_admin():
 
-        return redirect('/admin-login')
-
-
-    return render_template_string(
-        STYLE + """
-
-<!DOCTYPE html>
-
-<html>
-
-<head>
-
-    <title>Admin Panel</title>
-
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1">
-
-</head>
-
-<body>
+        return redirect(
+            "/admin-login"
+        )
 
 
-<header>
-
-    <h1>👨‍💼 SchoolSafe Admin</h1>
-
-    <p>Administrator Panel</p>
-
-</header>
+    conn = sqlite3.connect(
+        DB_FILE
+    )
 
 
-<div class="container">
-
-    <h2>Admin Menu</h2>
+    c = conn.cursor()
 
 
-    <div class="menu-container">
+    c.execute(
+        "SELECT COUNT(*) FROM reports"
+    )
 
 
-        <!-- TRACK REPORT -->
-
-        <div class="menu-card">
-
-            <h3>🔎 Track Report</h3>
-
-            <p>
-                Search for a specific report
-                using its Report ID.
-            </p>
+    total = c.fetchone()[0]
 
 
-            <a
-                href="/status"
-                class="btn"
-            >
+    c.execute(
+        """
 
-                Track Report
+        SELECT COUNT(*)
 
-            </a>
+        FROM reports
 
-        </div>
+        WHERE status='Submitted'
 
-
-        <!-- ADMIN DASHBOARD -->
-
-        <div class="menu-card">
-
-            <h3>📋 Admin Dashboard</h3>
-
-            <p>
-                View ALL student reports and
-                update their status.
-            </p>
+        """
+    )
 
 
-            <a
-                href="/admin-dashboard"
-                class="btn"
-            >
-
-                Admin Dashboard
-
-            </a>
-
-        </div>
+    submitted = c.fetchone()[0]
 
 
-    </div>
+    c.execute(
+        """
+
+        SELECT COUNT(*)
+
+        FROM reports
+
+        WHERE status='In Progress'
+
+        """
+    )
 
 
-    <br>
+    progress = c.fetchone()[0]
 
 
-    <a
-        href="/logout"
-        class="btn btn-danger"
-    >
+    c.execute(
+        """
 
-        🚪 Logout
+        SELECT COUNT(*)
 
-    </a>
+        FROM reports
+
+        WHERE status='Resolved'
+
+        """
+    )
+
+
+    resolved = c.fetchone()[0]
+
+
+    conn.close()
+
+
+    return page(
+        "Admin Panel",
+        f"""
+
+<main class="container">
+
+
+<section class="hero">
+
+
+<div
+    class="icon-circle"
+    style="margin:0 auto"
+>
+
+👨‍💼
+
+</div>
+
+
+<h2>
+
+Administrator Dashboard
+
+</h2>
+
+
+<p>
+
+Monitor school concerns and
+keep reports moving toward resolution.
+
+</p>
+
+
+</section>
+
+
+<div class="stats">
+
+
+<div class="stat">
+
+<span>
+Total Reports
+</span>
+
+<strong>
+{total}
+</strong>
+
+</div>
+
+
+<div class="stat">
+
+<span>
+New / Submitted
+</span>
+
+<strong>
+{submitted}
+</strong>
+
+</div>
+
+
+<div class="stat">
+
+<span>
+In Progress
+</span>
+
+<strong>
+{progress}
+</strong>
+
+</div>
+
+
+<div class="stat">
+
+<span>
+Resolved
+</span>
+
+<strong>
+{resolved}
+</strong>
+
+</div>
 
 
 </div>
 
 
-</body>
+<div class="menu-container">
 
-</html>
 
-"""
+<div class="menu-card">
+
+
+<div class="icon-circle">
+📋
+</div>
+
+
+<h3>
+
+Manage All Reports
+
+</h3>
+
+
+<p class="muted">
+
+View every submitted report
+and update its status.
+
+</p>
+
+
+<a
+    href="/admin-dashboard"
+    class="btn"
+>
+
+Open Dashboard →
+
+</a>
+
+
+</div>
+
+
+<div class="menu-card">
+
+
+<div class="icon-circle">
+🔎
+</div>
+
+
+<h3>
+
+Find a Report
+
+</h3>
+
+
+<p class="muted">
+
+Search for a specific report
+using its Report ID.
+
+</p>
+
+
+<a
+    href="/status"
+    class="btn"
+>
+
+Track Report →
+
+</a>
+
+
+</div>
+
+
+</div>
+
+
+<a
+    href="/logout"
+    class="btn btn-danger"
+>
+
+🚪 Logout
+
+</a>
+
+
+</main>
+
+""",
+        "👨‍💼 SchoolSafe Admin",
+        "Administrator Panel"
     )
 
 
 # =========================================================
 # ADMIN DASHBOARD
 # =========================================================
-
-@app.route('/admin-dashboard')
+@app.route("/admin-dashboard")
 def admin_dashboard():
 
-    if not session.get('admin_logged_in'):
+    if not is_admin():
 
-        return redirect('/admin-login')
+        return redirect(
+            "/admin-login"
+        )
 
 
-    conn = sqlite3.connect(DB_FILE)
+    search = request.args.get(
+        "search",
+        ""
+    ).strip()
+
+
+    conn = sqlite3.connect(
+        DB_FILE
+    )
+
 
     c = conn.cursor()
 
 
-    # IMPORTANT:
-    # Get ALL reports.
-    # Nothing is deleted when a new report is submitted.
+    if search:
 
-    c.execute("""
-        SELECT *
-        FROM reports
-        ORDER BY id DESC
-    """)
+        like = f"%{search}%"
+
+
+        c.execute(
+            """
+
+            SELECT *
+
+            FROM reports
+
+            WHERE report_id LIKE ?
+
+            OR reporter LIKE ?
+
+            OR issue_type LIKE ?
+
+            OR location LIKE ?
+
+            OR status LIKE ?
+
+            ORDER BY id DESC
+
+            """,
+
+            (
+                like,
+                like,
+                like,
+                like,
+                like
+            )
+        )
+
+
+    else:
+
+        c.execute(
+            """
+
+            SELECT *
+
+            FROM reports
+
+            ORDER BY id DESC
+
+            """
+        )
 
 
     reports = c.fetchall()
+
 
     conn.close()
 
@@ -1415,298 +2938,436 @@ def admin_dashboard():
 
         rows = """
 
-        <tr>
+<tr>
 
-            <td
-                colspan="8"
-                style="text-align:center;"
-            >
+<td
+    colspan="8"
+    style="text-align:center"
+>
 
-                No reports submitted yet.
+No matching reports found.
 
-            </td>
+</td>
 
-        </tr>
+</tr>
 
-        """
+"""
 
 
-    for report_data in reports:
-
-        current_status = report_data[7]
-
+    for r in reports:
 
         rows += f"""
 
-        <tr>
-
-            <td>
-                {html.escape(report_data[1])}
-            </td>
+<tr>
 
 
-            <td>
-                {html.escape(report_data[2])}
-            </td>
+<td>
+
+<strong>
+
+{html.escape(r[1])}
+
+</strong>
+
+<br>
+
+<small>
+
+{html.escape(r[8])}
+{html.escape(r[9])}
+
+</small>
+
+</td>
 
 
-            <td>
-                {html.escape(report_data[3])}
-            </td>
+<td>
+
+{html.escape(r[2])}
+
+</td>
 
 
-            <td>
-                {html.escape(report_data[4])}
-            </td>
+<td>
+
+{html.escape(r[3])}
+
+</td>
 
 
-            <td>
-                {html.escape(report_data[5])}
-            </td>
+<td>
+
+{html.escape(r[4])}
+
+</td>
 
 
-            <td>
-                {html.escape(report_data[6])}
-            </td>
+<td>
+
+{html.escape(r[5])}
+
+</td>
 
 
-            <td>
-                {html.escape(current_status)}
-            </td>
+<td>
 
 
-            <td>
+<span
+    class="badge {urgency_class(r[6])}"
+>
 
-                <form
-                    method="POST"
-                    action="/update/{report_data[0]}"
-                >
+{html.escape(r[6])}
 
-
-                    <select name="status">
+</span>
 
 
-                        <option
-                            value="Submitted"
-                            {"selected" if current_status == "Submitted" else ""}
-                        >
-                            Submitted
-                        </option>
+</td>
 
 
-                        <option
-                            value="Under Review"
-                            {"selected" if current_status == "Under Review" else ""}
-                        >
-                            Under Review
-                        </option>
+<td>
 
 
-                        <option
-                            value="In Progress"
-                            {"selected" if current_status == "In Progress" else ""}
-                        >
-                            In Progress
-                        </option>
+<span
+    class="status {status_class(r[7])}"
+>
+
+{html.escape(r[7])}
+
+</span>
 
 
-                        <option
-                            value="Resolved"
-                            {"selected" if current_status == "Resolved" else ""}
-                        >
-                            Resolved
-                        </option>
+</td>
 
 
-                    </select>
+<td>
 
 
-                    <button
-                        type="submit"
-                        class="btn"
-                    >
-
-                        Update
-
-                    </button>
-
-
-                </form>
-
-            </td>
-
-        </tr>
-
-        """
-
-
-    return render_template_string(
-        STYLE + f"""
-
-<!DOCTYPE html>
-
-<html>
-
-<head>
-
-    <title>Admin Dashboard</title>
-
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1">
-
-</head>
-
-<body>
-
-
-<header>
-
-    <h1>📋 Admin Dashboard</h1>
-
-    <p>All Student Reports</p>
-
-</header>
-
-
-<div
-    class="container"
-    style="max-width:1250px;"
+<form
+    method="POST"
+    action="/update/{r[0]}"
+    style="margin:0"
 >
 
 
-    <h2>Submitted Reports</h2>
+<select
+    name="status"
+    required
+>
 
 
-    <p>
-        All student reports are displayed here.
-        New reports are added to the list and
-        existing reports remain saved.
-    </p>
+<option
+    value="Submitted"
+    {"selected" if r[7] == "Submitted" else ""}
+>
+
+Submitted
+
+</option>
 
 
-    <table>
+<option
+    value="Under Review"
+    {"selected" if r[7] == "Under Review" else ""}
+>
 
-        <tr>
+Under Review
 
-            <th>Report ID</th>
-
-            <th>Student</th>
-
-            <th>Issue</th>
-
-            <th>Location</th>
-
-            <th>Description</th>
-
-            <th>Urgency</th>
-
-            <th>Status</th>
-
-            <th>Action</th>
-
-        </tr>
+</option>
 
 
-        {rows}
+<option
+    value="In Progress"
+    {"selected" if r[7] == "In Progress" else ""}
+>
+
+In Progress
+
+</option>
 
 
-    </table>
+<option
+    value="Resolved"
+    {"selected" if r[7] == "Resolved" else ""}
+>
+
+Resolved
+
+</option>
 
 
-    <br>
+</select>
 
 
-    <a
-        href="/admin"
-        class="btn"
-    >
+<button
+    type="submit"
+    class="btn"
+    style="width:100%"
+>
 
-        ← Admin Menu
+Update
 
-    </a>
+</button>
+
+
+</form>
+
+
+</td>
+
+
+</tr>
+
+"""
+
+
+    return page(
+        "Admin Dashboard",
+        f"""
+
+<main class="container wide">
+
+
+<section class="hero">
+
+
+<div
+    class="icon-circle"
+    style="margin:0 auto"
+>
+
+📋
+
+</div>
+
+
+<h2>
+
+All Student Reports
+
+</h2>
+
+
+<p>
+
+Review, search, and update
+submitted school concerns.
+
+</p>
+
+
+</section>
+
+
+<form
+    method="GET"
+    class="searchbar"
+>
+
+
+<input
+    type="text"
+    name="search"
+    value="{html.escape(search)}"
+    placeholder="Search by Report ID, student, issue, location, or status..."
+>
+
+
+<button
+    class="btn"
+    type="submit"
+>
+
+🔍 Search
+
+</button>
+
+
+<a
+    href="/admin-dashboard"
+    class="btn btn-secondary"
+>
+
+Clear
+
+</a>
+
+
+</form>
+
+
+<div class="table-wrap">
+
+
+<table>
+
+
+<tr>
+
+
+<th>
+Report ID
+</th>
+
+
+<th>
+Student
+</th>
+
+
+<th>
+Issue
+</th>
+
+
+<th>
+Location
+</th>
+
+
+<th>
+Description
+</th>
+
+
+<th>
+Urgency
+</th>
+
+
+<th>
+Status
+</th>
+
+
+<th>
+Action
+</th>
+
+
+</tr>
+
+
+{rows}
+
+
+</table>
 
 
 </div>
 
 
-</body>
+<a
+    href="/admin"
+    class="btn btn-secondary"
+>
 
-</html>
+← Admin Menu
 
-"""
+</a>
+
+
+</main>
+
+""",
+        "📋 SchoolSafe Admin",
+        "All Student Reports"
     )
 
 
 # =========================================================
 # UPDATE REPORT STATUS
 # =========================================================
-
-@app.route('/update/<int:id>', methods=['POST'])
+@app.route(
+    "/update/<int:id>",
+    methods=["POST"]
+)
 def update(id):
 
-    if not session.get('admin_logged_in'):
+    if not is_admin():
 
-        return redirect('/admin-login')
+        return redirect(
+            "/admin-login"
+        )
 
 
     status_value = request.form.get(
-        'status'
+        "status",
+        ""
     )
 
 
     allowed_statuses = [
+
         "Submitted",
+
         "Under Review",
+
         "In Progress",
+
         "Resolved"
+
     ]
 
 
     if status_value not in allowed_statuses:
 
-        return redirect('/admin-dashboard')
+        return redirect(
+            "/admin-dashboard"
+        )
 
 
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(
+        DB_FILE
+    )
+
 
     c = conn.cursor()
 
 
-    c.execute("""
+    c.execute(
+        """
+
         UPDATE reports
+
         SET status = ?
+
         WHERE id = ?
-    """, (
-        status_value,
-        id
-    ))
+
+        """,
+
+        (
+            status_value,
+            id
+        )
+    )
 
 
     conn.commit()
 
+
     conn.close()
 
 
-    return redirect('/admin-dashboard')
+    return redirect(
+        "/admin-dashboard"
+    )
 
 
 # =========================================================
 # LOGOUT
 # =========================================================
-
-@app.route('/logout')
+@app.route("/logout")
 def logout():
 
     session.clear()
 
-    return redirect('/')
+    return redirect("/")
 
 
 # =========================================================
 # RUN APPLICATION
 # =========================================================
-
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     port = int(
         os.environ.get(
@@ -1714,6 +3375,7 @@ if __name__ == '__main__':
             5000
         )
     )
+
 
     app.run(
         host="0.0.0.0",
