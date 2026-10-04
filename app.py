@@ -89,6 +89,11 @@ def init_db():
         )
     """)
     
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_applications_student_id
+        ON applications(student_id)
+    """)
+
     connection.commit()
     connection.close()
 
@@ -306,7 +311,7 @@ def student_portal():
         </div>
         <div class="card">
             <h2>🔎 Track Application</h2>
-            <p>Check the status of your school ID application.</p>
+            <p>Track your application using your Student ID or Application ID.</p>
             <a class="btn" href="{{ url_for('track_application') }}">Track Now</a>
         </div>
     </div>
@@ -390,25 +395,67 @@ def apply_id():
             photo_name = f"{application_id}{ext}"
             photo.save(os.path.join(app.config["UPLOAD_FOLDER"], photo_name))
 
-        # Save to database
+        # Save the application and its first history entry in one transaction.
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         connection = get_db()
-        connection.execute("""
-            INSERT INTO applications (
+
+        try:
+            connection.execute("""
+                INSERT INTO applications (
+                    application_id, student_id, first_name, middle_name, last_name, suffix,
+                    course, year_level, section, birth_date, sex, email, phone, address,
+                    emergency_contact, emergency_phone, photo, status, remarks, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
                 application_id, student_id, first_name, middle_name, last_name, suffix,
                 course, year_level, section, birth_date, sex, email, phone, address,
-                emergency_contact, emergency_phone, photo, status, remarks, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            application_id, student_id, first_name, middle_name, last_name, suffix,
-            course, year_level, section, birth_date, sex, email, phone, address,
-            emergency_contact, emergency_phone, photo_name, "Pending", "", now, now
-        ))
-        connection.commit()
-        connection.close()
+                emergency_contact, emergency_phone, photo_name, "Pending", "", now, now
+            ))
 
-        # Log history
-        add_history(application_id, "Pending", "Application submitted successfully")
+            connection.execute("""
+                INSERT INTO application_history
+                    (application_id, status, remarks, created_at)
+                VALUES (?, ?, ?, ?)
+            """, (
+                application_id,
+                "Pending",
+                "Application submitted successfully",
+                now
+            ))
+
+            connection.commit()
+
+        except sqlite3.IntegrityError:
+            connection.rollback()
+
+            if photo_name:
+                photo_path = os.path.join(app.config["UPLOAD_FOLDER"], photo_name)
+                if os.path.exists(photo_path):
+                    os.remove(photo_path)
+
+            return render_template_string("""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Submission Error</title>
+                {{ style|safe }}
+            </head>
+            <body>
+            <div class="container">
+                <div class="card">
+                    <h2>⚠️ Submission Could Not Be Completed</h2>
+                    <p>This Student ID already has an active application.</p>
+                    <a class="btn" href="{{ url_for('track_application') }}">Track Application</a>
+                    &nbsp;
+                    <a class="btn btn-success" href="{{ url_for('apply_id') }}">Try Again</a>
+                </div>
+            </div>
+            </body>
+            </html>
+            """, style=STYLE)
+
+        finally:
+            connection.close()
 
         # ✅ SUCCESS PAGE
         return render_template_string("""
@@ -511,112 +558,253 @@ def apply_id():
 # ==========================================================
 @app.route("/student/track", methods=["GET", "POST"])
 def track_application():
+    """Track an application using Student ID or Application ID."""
     if request.method == "POST":
-        app_id = request.form.get("application_id", "").strip()
-        return redirect(url_for("track_application", app_id=app_id))
+        search_type = request.form.get("search_type", "student_id").strip()
+        search_value = request.form.get("search_value", "").strip()
+
+        if not search_value:
+            return render_template_string("""
+            <script>
+                alert("Please enter your Student ID or Application ID.");
+                history.back();
+            </script>
+            """)
+
+        if search_type == "application_id":
+            return redirect(url_for("track_application", app_id=search_value))
+
+        return redirect(url_for("track_application", student_id=search_value))
 
     app_id = request.args.get("app_id", "").strip()
-    if not app_id:
+    student_id = request.args.get("student_id", "").strip()
+
+    if not app_id and not student_id:
         return render_template_string("""
-<!DOCTYPE html>
-<html>
-<head>
-<title>Track Application</title>
-{{ style|safe }}
-</head>
-<body>
-<div class="navbar">
-    <div class="logo">🪪 School ID System</div>
-    <a href="{{ url_for('student_portal') }}">Back</a>
-</div>
-<div class="container">
-    <div class="card">
-        <h2>🔎 Track Your Application</h2>
-        <form method="post">
-            <label>Enter your Application ID</label>
-            <input type="text" name="application_id" placeholder="e.g. SID-ABC123" required>
-            <button type="submit" class="btn">Check Status</button>
-        </form>
-    </div>
-</div>
-</body>
-</html>
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Track Application</title>
+            {{ style|safe }}
+        </head>
+        <body>
+        <div class="navbar">
+            <div class="logo">🪪 School ID System</div>
+            <a href="{{ url_for('student_portal') }}">Back</a>
+        </div>
+        <div class="container">
+            <div class="card">
+                <h2>🔎 Track Your Application</h2>
+                <p>Enter your Student ID to view your application status and history.</p>
+
+                <form method="post">
+                    <label>Search By</label>
+                    <select name="search_type" id="search_type" onchange="updatePlaceholder()">
+                        <option value="student_id">Student ID</option>
+                        <option value="application_id">Application ID</option>
+                    </select>
+
+                    <label id="search_label">Student ID</label>
+                    <input
+                        type="text"
+                        id="search_value"
+                        name="search_value"
+                        placeholder="Enter your Student ID"
+                        required
+                    >
+
+                    <button type="submit" class="btn">🔎 Track Application</button>
+                </form>
+            </div>
+        </div>
+
+        <script>
+        function updatePlaceholder() {
+            const type = document.getElementById("search_type").value;
+            const label = document.getElementById("search_label");
+            const input = document.getElementById("search_value");
+
+            if (type === "student_id") {
+                label.textContent = "Student ID";
+                input.placeholder = "Enter your Student ID";
+            } else {
+                label.textContent = "Application ID";
+                input.placeholder = "e.g. SID-ABC123";
+            }
+        }
+        </script>
+        </body>
+        </html>
         """, style=STYLE)
 
     connection = get_db()
-    app_data = connection.execute(
-        "SELECT * FROM applications WHERE application_id = ?", (app_id,)
-    ).fetchone()
-    history = connection.execute(
-        "SELECT * FROM application_history WHERE application_id = ? ORDER BY created_at DESC",
-        (app_id,)
-    ).fetchall()
+
+    if student_id:
+        applications = connection.execute("""
+            SELECT * FROM applications
+            WHERE student_id = ?
+            ORDER BY created_at DESC
+        """, (student_id,)).fetchall()
+    else:
+        applications = connection.execute("""
+            SELECT * FROM applications
+            WHERE application_id = ?
+        """, (app_id,)).fetchall()
+
     connection.close()
 
-    if not app_data:
+    if not applications:
+        search_display = student_id if student_id else app_id
+
         return render_template_string("""
-<!DOCTYPE html>
-<html>
-<head>
-<title>Not Found</title>
-{{ style|safe }}
-</head>
-<body>
-<div class="container">
-    <div class="card">
-        <h2>❌ Application Not Found</h2>
-        <p>No record for ID: <strong>{{ app_id }}</strong></p>
-        <a class="btn" href="{{ url_for('track_application') }}">Try Again</a>
-    </div>
-</div>
-</body>
-</html>
-        """, style=STYLE, app_id=app_id)
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Not Found</title>
+            {{ style|safe }}
+        </head>
+        <body>
+        <div class="container">
+            <div class="card">
+                <h2>❌ Application Not Found</h2>
+                <p>No application record was found for:</p>
+                <div class="application-id" style="font-size:24px;">
+                    {{ search_display }}
+                </div>
+                <p class="small">
+                    Please check your Student ID or Application ID and try again.
+                </p>
+                <a class="btn" href="{{ url_for('track_application') }}">Try Again</a>
+            </div>
+        </div>
+        </body>
+        </html>
+        """, style=STYLE, search_display=search_display)
+
+    # Load status history for every application belonging to the Student ID.
+    results = []
+    connection = get_db()
+
+    for app_data in applications:
+        history = connection.execute("""
+            SELECT * FROM application_history
+            WHERE application_id = ?
+            ORDER BY created_at DESC
+        """, (app_data["application_id"],)).fetchall()
+
+        results.append((app_data, history))
+
+    connection.close()
 
     return render_template_string("""
-<!DOCTYPE html>
-<html>
-<head>
-<title>Status — {{ app_id }}</title>
-{{ style|safe }}
-</head>
-<body>
-<div class="navbar">
-    <div class="logo">🪪 School ID System</div>
-    <a href="{{ url_for('student_portal') }}">Back</a>
-</div>
-<div class="container">
-    <div class="card">
-        <h2>Application Status</h2>
-        <p>Application ID:</p>
-        <div class="application-id">{{ app_id }}</div>
-        <p><strong>Name:</strong> {{ app['first_name'] }} {{ app['last_name'] }}</p>
-        <p><strong>Student ID:</strong> {{ app['student_id'] }}</p>
-        <p><strong>Status:</strong> <span class="status {{ app['status'].lower() }}">{{ app['status'] }}</span></p>
-        {% if app['remarks'] %}<p><strong>Remarks:</strong> {{ app['remarks'] }}</p>{% endif %}
-        {% if app['photo'] %}
-        <p><strong>Submitted Photo:</strong></p>
-        <img src="{{ url_for('uploaded_file', filename=app['photo']) }}" class="profile-photo">
-        {% endif %}
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Application Status</title>
+        {{ style|safe }}
+    </head>
+    <body>
+    <div class="navbar">
+        <div class="logo">🪪 School ID System</div>
+        <a href="{{ url_for('student_portal') }}">Back</a>
     </div>
-    <div class="card">
-        <h3>📋 Status History</h3>
-        <div class="timeline">
-            {% for item in history %}
-            <div class="timeline-item">
-                <p><span class="status {{ item['status'].lower() }}">{{ item['status'] }}</span></p>
-                <p>{{ item['remarks'] or '—' }}</p>
-                <p class="small">{{ item['created_at'] }}</p>
+
+    <div class="container">
+        <div class="card">
+            <h2>🔎 Application Tracking</h2>
+            <p>
+                <strong>Student ID:</strong>
+                {{ results[0][0]['student_id'] }}
+            </p>
+            <p class="small">
+                Your Student ID is linked to the application record stored in the system.
+            </p>
+        </div>
+
+        {% for app, history in results %}
+        <div class="card">
+            <h2>Application {{ app['application_id'] }}</h2>
+
+            <div class="form-grid">
+                <div>
+                    <label>Student ID</label>
+                    <p><strong>{{ app['student_id'] }}</strong></p>
+                </div>
+
+                <div>
+                    <label>Name</label>
+                    <p>
+                        {{ app['first_name'] }}
+                        {{ app['middle_name'] or '' }}
+                        {{ app['last_name'] }}
+                        {{ app['suffix'] or '' }}
+                    </p>
+                </div>
+
+                <div>
+                    <label>Course / Program</label>
+                    <p>{{ app['course'] }}</p>
+                </div>
+
+                <div>
+                    <label>Year Level</label>
+                    <p>{{ app['year_level'] }}</p>
+                </div>
+
+                <div>
+                    <label>Status</label>
+                    <p>
+                        <span class="status {{ app['status'].lower() }}">
+                            {{ app['status'] }}
+                        </span>
+                    </p>
+                </div>
+
+                <div>
+                    <label>Submitted</label>
+                    <p>{{ app['created_at'] }}</p>
+                </div>
             </div>
-            {% else %}
-            <p>No history available.</p>
-            {% endfor %}
+
+            {% if app['remarks'] %}
+                <p><strong>Remarks:</strong> {{ app['remarks'] }}</p>
+            {% endif %}
+
+            {% if app['photo'] %}
+                <p><strong>Submitted Photo:</strong></p>
+                <img src="{{ url_for('uploaded_file', filename=app['photo']) }}" class="profile-photo">
+            {% endif %}
+
+            <hr style="border:0;border-top:1px solid #ddd;margin:25px 0;">
+
+            <h3>📋 Status History</h3>
+            <div class="timeline">
+                {% for item in history %}
+                <div class="timeline-item">
+                    <p>
+                        <span class="status {{ item['status'].lower() }}">
+                            {{ item['status'] }}
+                        </span>
+                    </p>
+                    <p>{{ item['remarks'] or '—' }}</p>
+                    <p class="small">{{ item['created_at'] }}</p>
+                </div>
+                {% else %}
+                <p>No history available.</p>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <div class="card">
+            <a class="btn" href="{{ url_for('track_application') }}">
+                🔎 Track Another Student ID
+            </a>
         </div>
     </div>
-</div>
-</body>
-</html>
-    """, style=STYLE, app_id=app_id, app=app_data, history=history)
+    </body>
+    </html>
+    """, style=STYLE, results=results)
 
 # ==========================================================
 # SERVE UPLOADS
@@ -697,11 +885,12 @@ def admin_dashboard():
     {% if applications %}
     <table>
         <tr>
-            <th>ID</th><th>Name</th><th>Course</th><th>Status</th><th>Date</th><th>Action</th>
+            <th>Application ID</th><th>Student ID</th><th>Name</th><th>Course</th><th>Status</th><th>Date</th><th>Action</th>
         </tr>
         {% for app in applications %}
         <tr>
             <td>{{ app['application_id'] }}</td>
+            <td><strong>{{ app['student_id'] }}</strong></td>
             <td>{{ app['first_name'] }} {{ app['last_name'] }}</td>
             <td>{{ app['course'] }}</td>
             <td><span class="status {{ app['status'].lower() }}">{{ app['status'] }}</span></td>
@@ -738,7 +927,13 @@ def admin_view(app_id):
             "UPDATE applications SET status=?, remarks=?, updated_at=? WHERE application_id=?",
             (new_status, remarks, now, app_id)
         )
-        add_history(app_id, new_status, remarks)
+
+        connection.execute("""
+            INSERT INTO application_history
+                (application_id, status, remarks, created_at)
+            VALUES (?, ?, ?, ?)
+        """, (app_id, new_status, remarks, now))
+
         connection.commit()
         connection.close()
         return redirect(url_for("admin_view", app_id=app_id))
@@ -806,6 +1001,8 @@ def admin_logout():
 # ==========================================================
 # RUN
 # ==========================================================
+# Initialize the database when the application is loaded.
+init_db()
+
 if __name__ == "__main__":
-    init_db()
     app.run(debug=True)
