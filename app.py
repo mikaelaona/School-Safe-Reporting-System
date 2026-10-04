@@ -1447,22 +1447,22 @@ def app_template(content, active="Dashboard"):
     {% if session.get('role') == 'Student' %}
 
     <a class="menu-link {{ 'active' if active == 'Attendance' else '' }}"
-       href="{url_for('attendance')}">
+       href="{{ url_for('attendance') }}">
        🕒 <span>Attendance</span>
     </a>
 
     <a class="menu-link {{ 'active' if active == 'Work Log' else '' }}"
-       href="{url_for('work_logs')}">
+       href="{{ url_for('work_logs') }}">
        📝 <span>Work Log</span>
     </a>
 
     <a class="menu-link {{ 'active' if active == 'Reports' else '' }}"
-       href="{url_for('weekly_reports')}">
+       href="{{ url_for('weekly_reports') }}">
        📄 <span>Weekly Reports</span>
     </a>
 
     <a class="menu-link {{ 'active' if active == 'Progress' else '' }}"
-       href="{url_for('progress')}">
+       href="{{ url_for('progress') }}">
        📊 <span>Progress</span>
     </a>
 
