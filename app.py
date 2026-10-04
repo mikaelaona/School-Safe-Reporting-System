@@ -1801,10 +1801,10 @@ def student_dashboard():
         <p style="color:#64748b;margin-top:-5px;">Use these buttons to quickly record your OJT activities.</p>
 
         <div class="quick-actions">
-            <a class="quick-btn" href="{url_for('attendance')}">🕒 <span><strong>Attendance</strong><small>Time in or out</small></span></a>
-            <a class="quick-btn" href="{url_for('work_logs')}">📝 <span><strong>Work Log</strong><small>Record your tasks</small></span></a>
-            <a class="quick-btn" href="{url_for('weekly_reports')}">📄 <span><strong>Weekly Report</strong><small>Submit your report</small></span></a>
-            <a class="quick-btn" href="{url_for('progress')}">📊 <span><strong>Progress</strong><small>View your progress</small></span></a>
+            <a class="quick-btn" href="{{ url_for('attendance') }}">🕒 <span><strong>Attendance</strong><small>Time in or out</small></span></a>
+            <a class="quick-btn" href="{{ url_for('work_logs') }}">📝 <span><strong>Work Log</strong><small>Record your tasks</small></span></a>
+            <a class="quick-btn" href="{{ url_for('weekly_reports') }}">📄 <span><strong>Weekly Report</strong><small>Submit your report</small></span></a>
+            <a class="quick-btn" href="{{ url_for('progress') }}">📊 <span><strong>Progress</strong><small>View your progress</small></span></a>
         </div>
 
     </div>
@@ -2626,19 +2626,19 @@ def company_dashboard():
 
         <div style="display:flex;gap:12px;flex-wrap:wrap;">
 
-            <a href="{url_for('company_students')}"
+            <a href="{{ url_for('company_students') }}"
                class="primary-btn"
                style="background:#1769e0;color:white;">
                 👨‍🎓 View Students
             </a>
 
-            <a href="{url_for('verify_logs')}"
+            <a href="{{ url_for('verify_logs') }}"
                class="primary-btn"
                style="background:#1769e0;color:white;">
                 ✔️ Verify Work Logs
             </a>
 
-            <a href="{url_for('company_evaluation')}"
+            <a href="{{ url_for('company_evaluation') }}"
                class="primary-btn"
                style="background:#1769e0;color:white;">
                 ⭐ Evaluation
@@ -3116,7 +3116,7 @@ def adviser_dashboard():
             reports, and progress from the Students page.
         </p>
 
-        <a href="{url_for('adviser_students')}"
+        <a href="{{ url_for('adviser_students') }}"
            class="primary-btn"
            style="background:#1769e0;color:white;">
             View Students
