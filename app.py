@@ -214,13 +214,17 @@ def login_required(f):
 
 
 def role_required(*roles):
+    allowed_roles = {str(role).strip().lower() for role in roles}
+
     def decorator(f):
         @wraps(f)
         def decorated(*args, **kwargs):
             if "user_id" not in session:
                 return redirect(url_for("login"))
 
-            if session.get("role") not in roles:
+            current_role = str(session.get("role", "")).strip().lower()
+
+            if current_role not in allowed_roles:
                 return redirect(url_for("dashboard"))
 
             return f(*args, **kwargs)
@@ -1026,6 +1030,64 @@ th {
     }
 }
 
+/* ================================
+   QUICK ACTIONS
+================================ */
+
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.quick-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px;
+    background: #f8fbff;
+    border: 1px solid #e1eaf5;
+    border-radius: 12px;
+    color: #1769e0;
+    transition: .2s;
+}
+
+.quick-btn:hover {
+    transform: translateY(-2px);
+    border-color: #bcd7f8;
+    box-shadow: 0 8px 20px rgba(0,0,0,.06);
+}
+
+.quick-btn > span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.quick-btn strong {
+    color: #1f2937;
+    font-size: 13px;
+}
+
+.quick-btn small {
+    color: #64748b;
+    font-size: 11px;
+}
+
+@media(max-width: 900px) {
+    .quick-actions {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media(max-width: 700px) {
+    .quick-actions {
+        grid-template-columns: 1fr;
+    }
+}
+
+
 </style>
 """
 
@@ -1111,7 +1173,7 @@ LANDING_PAGE = """
                 </div>
 
                 <div class="preview-welcome">
-                    <h3>Good morning, Miah! 👋</h3>
+                    <h3>Good morning! 👋</h3>
                     <p>Here is your OJT progress today.</p>
                 </div>
 
@@ -1282,6 +1344,7 @@ LOGIN_PAGE = """
                     type="email"
                     name="email"
                     class="form-control"
+                    autocomplete="email"
                     placeholder="Enter your email"
                     required>
             </div>
@@ -1293,6 +1356,7 @@ LOGIN_PAGE = """
                     type="password"
                     name="password"
                     class="form-control"
+                    autocomplete="current-password"
                     placeholder="Enter your password"
                     required>
             </div>
@@ -1383,22 +1447,22 @@ def app_template(content, active="Dashboard"):
     {% if session.get('role') == 'Student' %}
 
     <a class="menu-link {{ 'active' if active == 'Attendance' else '' }}"
-       href="{{ url_for('attendance') }}">
+       href="{url_for('attendance')}">
        🕒 <span>Attendance</span>
     </a>
 
     <a class="menu-link {{ 'active' if active == 'Work Log' else '' }}"
-       href="{{ url_for('work_logs') }}">
+       href="{url_for('work_logs')}">
        📝 <span>Work Log</span>
     </a>
 
     <a class="menu-link {{ 'active' if active == 'Reports' else '' }}"
-       href="{{ url_for('weekly_reports') }}">
+       href="{url_for('weekly_reports')}">
        📄 <span>Weekly Reports</span>
     </a>
 
     <a class="menu-link {{ 'active' if active == 'Progress' else '' }}"
-       href="{{ url_for('progress') }}">
+       href="{url_for('progress')}">
        📊 <span>Progress</span>
     </a>
 
@@ -1524,11 +1588,25 @@ def login():
 
         if user and check_password_hash(user["password"], password):
 
+            role = str(user["role"] or "").strip().lower()
+            role_map = {
+                "student": "Student",
+                "company": "Company",
+                "adviser": "Adviser",
+                "admin": "Admin"
+            }
+
+            if role not in role_map:
+                flash("Your account role is not configured correctly. Please contact the administrator.")
+                return render_template_string(LOGIN_PAGE)
+
+            session.clear()
             session["user_id"] = user["id"]
             session["name"] = user["name"]
-            session["role"] = user["role"]
+            session["role"] = role_map[role]
             session["company"] = user["company"]
 
+            # Automatically open the correct dashboard after login.
             return redirect(url_for("dashboard"))
 
         flash("Invalid email or password.")
@@ -1605,21 +1683,24 @@ def calculate_progress(student_id):
 @login_required
 def dashboard():
 
-    role = session.get("role")
+    # Normalize the stored role so the correct dashboard always opens.
+    role = str(session.get("role", "")).strip().lower()
 
-    if role == "Student":
+    if role == "student":
         return student_dashboard()
 
-    if role == "Company":
+    if role == "company":
         return company_dashboard()
 
-    if role == "Adviser":
+    if role == "adviser":
         return adviser_dashboard()
 
-    if role == "Admin":
+    if role == "admin":
         return admin_dashboard()
 
-    return redirect(url_for("logout"))
+    session.clear()
+    flash("Your account role could not be recognized. Please log in again.")
+    return redirect(url_for("login"))
 
 
 # =========================================================
@@ -1709,6 +1790,21 @@ def student_dashboard():
 
         <div class="big-progress">
             <div style="width:{progress_value}%"></div>
+        </div>
+
+    </div>
+
+
+    <div class="section">
+
+        <h3>Quick Actions</h3>
+        <p style="color:#64748b;margin-top:-5px;">Use these buttons to quickly record your OJT activities.</p>
+
+        <div class="quick-actions">
+            <a class="quick-btn" href="{url_for('attendance')}">🕒 <span><strong>Attendance</strong><small>Time in or out</small></span></a>
+            <a class="quick-btn" href="{url_for('work_logs')}">📝 <span><strong>Work Log</strong><small>Record your tasks</small></span></a>
+            <a class="quick-btn" href="{url_for('weekly_reports')}">📄 <span><strong>Weekly Report</strong><small>Submit your report</small></span></a>
+            <a class="quick-btn" href="{url_for('progress')}">📊 <span><strong>Progress</strong><small>View your progress</small></span></a>
         </div>
 
     </div>
@@ -3590,9 +3686,10 @@ def admin_reports():
 # START APPLICATION
 # =========================================================
 
-if __name__ == "__main__":
+# Initialize the database when the application module is loaded.
+init_db()
 
-    init_db()
+if __name__ == "__main__":
 
     app.run(
         host="0.0.0.0",
