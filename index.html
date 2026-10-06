@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>School Lost & Found</title>
+<style>
+:root{--navy:#063b6f;--blue:#0b67b2;--light:#eaf4ff;--gold:#f0a500;--green:#198754;--red:#dc3545;--bg:#f5f7fa;--text:#243447;--muted:#6c757d;--border:#dfe5ec;--shadow:0 10px 30px rgba(0,0,0,.08)}
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}button,input,select,textarea{font:inherit}button{cursor:pointer}header{background:linear-gradient(135deg,#03284d,var(--navy),var(--blue));color:#fff;text-align:center;padding:28px 20px}header h1{font-size:30px}header p{opacity:.9;margin-top:5px}nav{background:#fff;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;display:flex;justify-content:center;flex-wrap:wrap;box-shadow:0 2px 10px rgba(0,0,0,.04)}nav button{border:0;background:transparent;color:#52606d;padding:15px 18px;font-weight:700;border-bottom:3px solid transparent}nav button:hover,nav button.active{color:var(--blue);border-bottom-color:var(--gold);background:var(--light)}.container{max-width:1100px;margin:30px auto;padding:0 18px}.tab{display:none}.tab.active{display:block}.hero{background:linear-gradient(135deg,#e9f3ff,#fff);border:1px solid #d7e8fb;border-radius:18px;padding:24px;margin-bottom:22px;box-shadow:var(--shadow)}.hero h2{color:var(--navy);margin-bottom:8px}.hero p,.small{color:var(--muted)}.toolbar{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;margin-bottom:20px}.input,.select,.textarea{width:100%;border:1px solid #cfd8e3;border-radius:10px;padding:12px 13px;background:#fff;outline:none}.input:focus,.select:focus,.textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(11,103,178,.12)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:var(--shadow)}.card-header{display:flex;justify-content:space-between;gap:12px;margin-bottom:15px;padding-bottom:12px;border-bottom:1px solid var(--border)}.item-image{width:100%;height:210px;object-fit:cover;border-radius:12px;background:#edf1f5;margin-bottom:15px}.placeholder{display:grid;place-items:center;color:#8a94a3;font-size:14px}.item-info p{margin:5px 0}.item-info strong{color:#374151}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.btn{border:0;border-radius:10px;padding:11px 16px;font-weight:800;color:#fff;background:var(--blue)}.btn.secondary{background:#edf2f7;color:#354052}.btn.success{background:var(--green)}.btn.danger{background:var(--red)}.btn.gold{background:var(--gold);color:#222}.form-card{max-width:780px;margin:0 auto}.form-group{margin-bottom:16px}label{display:block;font-weight:700;font-size:14px;margin-bottom:7px}.radio-group{display:flex;gap:20px;flex-wrap:wrap}.radio-group label{display:flex;align-items:center;gap:7px;font-weight:500;margin:0}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}.empty{text-align:center;padding:45px 15px;color:var(--muted);background:#fff;border:1px dashed #cfd7e1;border-radius:14px}.notice{display:none;padding:12px 14px;border-radius:10px;margin-bottom:15px;font-weight:600}.notice.show{display:block}.notice.success{background:#eaf8ef;color:#176b44}.notice.error{background:#fdebec;color:#a61f2d}.modal{position:fixed;inset:0;background:rgba(7,22,38,.62);display:none;justify-content:center;align-items:center;z-index:100;padding:18px}.modal.show{display:flex}.modal-box{width:min(520px,100%);background:#fff;border-radius:18px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.25);max-height:90vh;overflow:auto}.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.close{border:0;background:#edf2f7;width:36px;height:36px;border-radius:50%;font-size:18px}footer{text-align:center;padding:25px;color:#7b8794;font-size:13px}@media(max-width:800px){.toolbar,.grid,.two-col{grid-template-columns:1fr}}@media(max-width:560px){header h1{font-size:24px}nav button{flex:1 1 100%}.card{padding:16px}}
+</style>
+</head>
+<body>
+<header><h1>🏫 School Lost &amp; Found</h1><p>A simple way to report, find, and return lost belongings.</p></header>
+<nav>
+<button class="active" id="nav-home" onclick="switchTab('home')">Browse Items</button>
+<button id="nav-report" onclick="switchTab('report')">Report Item</button>
+<button id="nav-claims" onclick="switchTab('claims')">My Claims</button>
+<button onclick="openAdminLogin()">Admin</button>
+</nav>
+<main class="container">
+<section id="home" class="tab active">
+<div class="hero"><h2>Find What Was Lost</h2><p>Search reported items by name, location, or status. Check the details and submit a claim for found items.</p></div>
+<div class="toolbar"><input id="searchInput" class="input" placeholder="Search item name, description, or location..." oninput="renderItems()"><select id="statusFilter" class="select" onchange="renderItems()"><option value="ALL">All Items</option><option value="LOST">Lost Items</option><option value="FOUND">Found Items</option></select><select id="categoryFilter" class="select" onchange="renderItems()"><option value="ALL">All Categories</option><option>IDs &amp; Cards</option><option>Electronics</option><option>Books &amp; Documents</option><option>Personal Belongings</option><option>Others</option></select></div>
+<div id="homeNotice" class="notice"></div><div id="itemsContainer" class="grid"></div>
+</section>
+<section id="report" class="tab"><div class="card form-card"><h2 style="color:var(--navy);margin-bottom:6px">Report a Lost or Found Item</h2><p class="small" style="margin-bottom:20px">Provide complete details so other users can identify the item easily.</p><div id="reportNotice" class="notice"></div>
+<form id="reportForm">
+<div class="form-group"><label>I am a:</label><div class="radio-group"><label><input type="radio" name="reporterType" value="Student" checked> Student</label><label><input type="radio" name="reporterType" value="Teacher/Staff"> Teacher/Staff</label></div></div>
+<div class="form-group"><label>Report Type:</label><div class="radio-group"><label><input type="radio" name="itemType" value="LOST" checked onchange="toggleFoundFields()"> Lost Item</label><label><input type="radio" name="itemType" value="FOUND" onchange="toggleFoundFields()"> Found Item</label></div></div>
+<div class="two-col"><div class="form-group"><label for="title">Item Name *</label><input id="title" class="input" required placeholder="Example: Black Wallet"></div><div class="form-group"><label for="category">Category *</label><select id="category" class="select" required><option>IDs &amp; Cards</option><option>Electronics</option><option>Books &amp; Documents</option><option>Personal Belongings</option><option>Others</option></select></div></div>
+<div class="two-col"><div class="form-group"><label for="location">Location *</label><input id="location" class="input" required placeholder="Example: Library, Room 204"></div><div class="form-group"><label for="date">Date *</label><input id="date" type="date" class="input" required></div></div>
+<div class="form-group"><label for="description">Description *</label><textarea id="description" class="textarea" rows="4" required placeholder="Color, brand, size, markings, or other useful details..."></textarea></div>
+<div class="form-group"><label for="image">Photo (optional)</label><input id="image" type="file" class="input" accept="image/*"><div class="small">For this demo, images are stored in this browser.</div></div>
+<div class="form-group"><label for="contact">Contact Information *</label><input id="contact" class="input" required placeholder="Email or phone number"></div>
+<div id="foundFields" style="display:none"><div class="form-group"><label for="turnoverLocation">Turnover Location</label><input id="turnoverLocation" class="input" placeholder="Example: School Security Office"></div><div class="form-group"><label for="secretQuestion">Ownership Verification Question</label><input id="secretQuestion" class="input" placeholder="Example: What was inside the wallet?"></div></div>
+<div class="actions"><button class="btn" type="submit">Submit Report</button><button class="btn secondary" type="reset" onclick="setTimeout(toggleFoundFields,0)">Clear</button></div>
+</form></div></section>
+<section id="claims" class="tab"><div class="hero"><h2>My Claims</h2><p>Your claim request is processed by the school administrator. Enter the same claimant name to view them.</p></div><div class="card" style="max-width:700px;margin:0 auto 20px"><label for="claimsName">Claimant Name</label><div style="display:flex;gap:10px"><input id="claimsName" class="input" placeholder="Enter the name used in your claim"><button class="btn" onclick="renderMyClaims()">View</button></div></div><div id="myClaimsContainer"></div></section>
+<section id="adminPanel" class="tab"><div class="hero"><h2>Admin Panel</h2><p>Review reports and claims. This browser-only demo is intended for testing and presentation.</p></div><div id="adminContainer"></div></section>
+</main>
+<footer>© 2026 School Lost &amp; Found · Digital Campus Lost &amp; Found System</footer>
+<div id="claimModal" class="modal"><div class="modal-box"><div class="modal-header"><h3>Claim Found Item</h3><button class="close" onclick="closeModal('claimModal')">×</button></div><form id="claimForm"><input type="hidden" id="claimItemId"><div id="claimQuestionBox" class="notice show" style="background:#fff6e3;color:#8a5900"></div><div class="form-group"><label for="claimantName">Full Name *</label><input id="claimantName" class="input" required></div><div class="form-group"><label for="claimantContact">Contact Information *</label><input id="claimantContact" class="input" required></div><div class="form-group"><label for="claimAnswer">Ownership Proof / Answer</label><textarea id="claimAnswer" class="textarea" rows="4" placeholder="Describe details that only the owner is likely to know."></textarea></div><div class="actions"><button class="btn" type="submit">Submit Claim</button><button class="btn secondary" type="button" onclick="closeModal('claimModal')">Cancel</button></div></form></div></div>
+<div id="adminModal" class="modal"><div class="modal-box" style="max-width:420px"><div class="modal-header"><h3>Admin Login</h3><button class="close" onclick="closeModal('adminModal')">×</button></div><div id="adminLoginNotice" class="notice"></div><form id="adminLoginForm"><div class="form-group"><label for="adminPassword">Admin Password</label><input id="adminPassword" type="password" class="input" required placeholder="Enter password"></div><button class="btn" style="width:100%">Login</button></form><p class="small" style="margin-top:12px">Demo password: <b>admin123</b></p></div></div>
+<script>
+"use strict";
+
+let items = [];
+let claims = [];
+let isAdmin = false;
+
+document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("date").valueAsDate = new Date();
+
+    document.getElementById("reportForm").addEventListener("submit", submitReport);
+    document.getElementById("claimForm").addEventListener("submit", submitClaim);
+    document.getElementById("adminLoginForm").addEventListener("submit", verifyAdmin);
+
+    loadItems();
+    toggleFoundFields();
+
+    setInterval(loadItems, 10000);
+});
+
+async function loadItems() {
+    try {
+        const response = await fetch("/api/items", { cache: "no-store" });
+
+        if (!response.ok) {
+            throw new Error("Failed to load items.");
+        }
+
+        const data = await response.json();
+        items = Array.isArray(data) ? data : [];
+        renderItems();
+
+        if (isAdmin) {
+            await loadClaims();
+        }
+    } catch (error) {
+        console.error(error);
+        showNotice("homeNotice", "Unable to load the latest items.", "error");
+    }
+}
+
+async function loadClaims() {
+    try {
+        const response = await fetch("/api/claims", { cache: "no-store" });
+        if (!response.ok) throw new Error("Failed to load claims.");
+
+        const data = await response.json();
+        claims = Array.isArray(data) ? data : [];
+        renderAdminClaims();
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+function renderItems() {
+    const container = document.getElementById("itemsContainer");
+    const search = document.getElementById("searchInput").value.trim().toLowerCase();
+    const status = document.getElementById("statusFilter").value;
+    const category = document.getElementById("categoryFilter").value;
+
+    const filtered = items.filter(item => {
+        const text = [
+            item.title,
+            item.description,
+            item.location,
+            item.category
+        ].join(" ").toLowerCase();
+
+        return (!search || text.includes(search))
+            && (status === "ALL" || item.type === status)
+            && (category === "ALL" || item.category === category);
+    });
+
+    if (!filtered.length) {
+        container.innerHTML = `<div class="empty" style="grid-column:1/-1;">
+            <h3>No matching items</h3>
+            <p style="margin-top:6px;">Try another search or report the item if it has not been listed yet.</p>
+        </div>`;
+        return;
+    }
+
+    container.innerHTML = filtered.map(item => {
+        const image = item.imageUrl
+            ? `<img src="${escapeHtml(item.imageUrl)}" class="item-image" alt="Item photo" loading="lazy">`
+            : `<div class="item-image placeholder">No photo uploaded</div>`;
+
+        const foundExtra = item.type === "FOUND" && item.turnoverLocation
+            ? `<p><strong>Turnover:</strong> ${escapeHtml(item.turnoverLocation)}</p>`
+            : "";
+
+        const action = item.type === "FOUND"
+            ? `<button class="btn gold" onclick="openClaimModal('${escapeJs(item.id)}')">Claim This Item</button>`
+            : "";
+
+        return `
+            <article class="card">
+                <div class="card-header">
+                    <div>
+                        <span class="badge ${item.type === "LOST" ? "lost" : "found"}">${escapeHtml(item.type)}</span>
+                        <span class="small" style="margin-left:8px;">${escapeHtml(item.userRole)}</span>
+                    </div>
+                    <span class="small">${escapeHtml(item.date)}</span>
+                </div>
+                ${image}
+                <h3 style="color:#063b6f;margin-bottom:8px;">${escapeHtml(item.title)}</h3>
+                <div class="item-info">
+                    <p><strong>Category:</strong> ${escapeHtml(item.category)}</p>
+                    <p><strong>Location:</strong> ${escapeHtml(item.location)}</p>
+                    <p><strong>Description:</strong> ${escapeHtml(item.description)}</p>
+                    ${foundExtra}
+                    <p><strong>Contact:</strong> ${escapeHtml(item.contact)}</p>
+                </div>
+                <div class="actions">${action}</div>
+            </article>
+        `;
+    }).join("");
+}
+
+async function submitReport(event) {
+    event.preventDefault();
+
+    const type = document.querySelector('input[name="itemType"]:checked').value;
+    const reporterType = document.querySelector('input[name="reporterType"]:checked').value;
+    const imageFile = document.getElementById("image").files[0];
+
+    const formData = new FormData();
+    formData.append("id", `item_${Date.now()}`);
+    formData.append("userRole", reporterType);
+    formData.append("type", type);
+    formData.append("title", document.getElementById("title").value.trim());
+    formData.append("category", document.getElementById("category").value);
+    formData.append("location", document.getElementById("location").value.trim());
+    formData.append("date", document.getElementById("date").value);
+    formData.append("description", document.getElementById("description").value.trim());
+    formData.append("contact", document.getElementById("contact").value.trim());
+
+    if (type === "FOUND") {
+        formData.append("turnoverLocation", document.getElementById("turnoverLocation").value.trim());
+        formData.append("secretQuestion", document.getElementById("secretQuestion").value.trim());
+    }
+
+    if (imageFile) {
+        if (!imageFile.type.startsWith("image/")) {
+            showNotice("reportNotice", "Please select a valid image file.", "error");
+            return;
+        }
+
+        if (imageFile.size > 5 * 1024 * 1024) {
+            showNotice("reportNotice", "The photo must be 5 MB or smaller.", "error");
+            return;
+        }
+
+        formData.append("image", imageFile);
+    }
+
+    try {
+        const response = await fetch("/api/items", {
+            method: "POST",
+            body: formData
+        });
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(result.message || "Failed to save the report.");
+        }
+
+        showNotice("reportNotice", "Report submitted successfully!", "success");
+        document.getElementById("reportForm").reset();
+        document.getElementById("date").valueAsDate = new Date();
+        toggleFoundFields();
+
+        await loadItems();
+        setTimeout(() => switchTab("home"), 600);
+    } catch (error) {
+        console.error(error);
+        showNotice("reportNotice", error.message || "Cannot connect to the server.", "error");
+    }
+}
+
+function openClaimModal(itemId) {
+    const item = items.find(x => String(x.id) === String(itemId));
+    if (!item) return;
+
+    document.getElementById("claimItemId").value = itemId;
+
+    document.getElementById("claimQuestionBox").textContent =
+        item.secretQuestion
+            ? "Verification Question: " + item.secretQuestion
+            : "Please provide specific details to help prove ownership.";
+
+    document.getElementById("claimModal").classList.add("show");
+}
+
+function submitClaim(event) {
+    event.preventDefault();
+
+    const itemId = document.getElementById("claimItemId").value;
+    const item = items.find(x => String(x.id) === String(itemId));
+
+    if (!item) {
+        alert("This item is no longer available.");
+        closeModal("claimModal");
+        return;
+    }
+
+    submitClaimToServer(item);
+}
+
+async function submitClaimToServer(item) {
+    const payload = {
+        claimId: `claim_${Date.now()}`,
+        itemId: item.id,
+        itemTitle: item.title,
+        claimantName: document.getElementById("claimantName").value.trim(),
+        claimantContact: document.getElementById("claimantContact").value.trim(),
+        claimAnswer: document.getElementById("claimAnswer").value.trim()
+    };
+
+    if (!payload.claimantName || !payload.claimantContact) {
+        alert("Please complete your name and contact information.");
+        return;
+    }
+
+    try {
+        const response = await fetch("/api/claims", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(result.message || "Failed to submit claim.");
+        }
+
+        closeModal("claimModal");
+        alert("Claim submitted successfully.");
+    } catch (error) {
+        console.error(error);
+        alert(error.message || "Cannot connect to the server.");
+    }
+}
+
+async function verifyAdmin(event) {
+    event.preventDefault();
+
+    const password = document.getElementById("adminPassword").value;
+
+    try {
+        const response = await fetch("/api/admin/verify", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({password})
+        });
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(result.message || "Incorrect admin password.");
+        }
+
+        isAdmin = true;
+        closeModal("adminModal");
+        document.getElementById("adminPassword").value = "";
+
+        await loadClaims();
+        switchTab("adminPanel");
+    } catch (error) {
+        showNotice("adminLoginNotice", error.message, "error");
+    }
+}
+
+function renderAdminClaims() {
+    const container = document.getElementById("adminContainer");
+
+    if (!isAdmin) {
+        container.innerHTML = '<div class="empty">Admin authentication required.</div>';
+        return;
+    }
+
+    if (!claims.length) {
+        container.innerHTML = '<div class="empty">No claims submitted yet.</div>';
+        return;
+    }
+
+    container.innerHTML = claims.map(claim => `
+        <div class="card">
+            <div class="card-header">
+                <h3 style="color:#063b6f;">${escapeHtml(claim.itemTitle)}</h3>
+                <span class="badge ${
+                    claim.status === "Approved" ? "approved" :
+                    claim.status === "Rejected" ? "rejected" : "pending"
+                }">${escapeHtml(claim.status)}</span>
+            </div>
+
+            <p><strong>Claimant:</strong> ${escapeHtml(claim.claimantName)}</p>
+            <p><strong>Contact:</strong> ${escapeHtml(claim.claimantContact)}</p>
+            <p><strong>Proof:</strong> ${escapeHtml(claim.claimAnswer || "—")}</p>
+            <p class="small" style="margin-top:8px;">
+                Submitted: ${escapeHtml(new Date(claim.submittedAt).toLocaleString())}
+            </p>
+
+            ${claim.adminNote ? `
+                <div class="notice show" style="margin-top:12px;">
+                    ${escapeHtml(claim.adminNote)}
+                </div>
+            ` : ""}
+
+            ${claim.status === "Pending" ? `
+                <div class="actions">
+                    <button class="btn success" onclick="approveClaim('${escapeJs(claim.claimId)}')">Approve</button>
+                    <button class="btn danger" onclick="rejectClaim('${escapeJs(claim.claimId)}')">Reject</button>
+                </div>
+            ` : ""}
+        </div>
+    `).join("");
+}
+
+async function approveClaim(claimId) {
+    if (!confirm("Approve this claim and mark the found item as claimed?")) return;
+
+    try {
+        const response = await fetch(
+            `/api/claims/${encodeURIComponent(claimId)}/approve`,
+            {method: "POST"}
+        );
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(result.message || "Unable to approve claim.");
+        }
+
+        await loadItems();
+        await loadClaims();
+        renderAdminClaims();
+        alert("Claim approved.");
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function rejectClaim(claimId) {
+    if (!confirm("Reject this claim?")) return;
+
+    try {
+        const response = await fetch(
+            `/api/claims/${encodeURIComponent(claimId)}/reject`,
+            {method: "DELETE"}
+        );
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(result.message || "Unable to reject claim.");
+        }
+
+        await loadClaims();
+        renderAdminClaims();
+        alert("Claim rejected.");
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+function renderMyClaims() {
+    const container = document.getElementById("myClaimsContainer");
+    container.innerHTML = `
+        <div class="empty">
+            <h3>Claims are reviewed by the school administrator.</h3>
+            <p style="margin-top:6px;">
+                Please keep your claim details and contact information for follow-up.
+            </p>
+        </div>
+    `;
+}
+
+function switchTab(tabId) {
+    if (tabId === "claims") {
+        if (isAdmin) {
+            switchTab("adminPanel");
+        } else {
+            openAdminLogin();
+        }
+        return;
+    }
+
+    document.querySelectorAll(".tab").forEach(tab => tab.classList.remove("active"));
+    document.querySelectorAll("nav button").forEach(button => button.classList.remove("active"));
+
+    const target = document.getElementById(tabId);
+    const navButton = document.getElementById("nav-" + tabId);
+
+    if (!target) return;
+
+    target.classList.add("active");
+    if (navButton) navButton.classList.add("active");
+    window.scrollTo({top: 0, behavior: "smooth"});
+}
+
+function openAdminLogin() {
+    if (isAdmin) {
+        switchTab("adminPanel");
+        return;
+    }
+
+    document.getElementById("adminModal").classList.add("show");
+    document.getElementById("adminPassword").focus();
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.remove("show");
+
+    if (id === "claimModal") {
+        document.getElementById("claimForm").reset();
+    }
+
+    if (id === "adminModal") {
+        document.getElementById("adminLoginForm").reset();
+    }
+}
+
+function toggleFoundFields() {
+    const selected = document.querySelector('input[name="itemType"]:checked');
+    document.getElementById("foundFields").style.display =
+        selected && selected.value === "FOUND" ? "block" : "none";
+}
+
+function showNotice(id, message, type="success") {
+    const box = document.getElementById(id);
+    if (!box) return;
+
+    box.textContent = message;
+    box.className = "notice show " + type;
+}
+
+function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({
+        "&":"&amp;",
+        "<":"&lt;",
+        ">":"&gt;",
+        '"':"&quot;",
+        "'":"&#039;"
+    }[char]));
+}
+
+function escapeJs(value) {
+    return String(value ?? "")
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/\r/g, "\\r")
+        .replace(/\n/g, "\\n");
+}
+</script></script>
+</body>
+</html>
